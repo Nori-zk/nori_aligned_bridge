@@ -88,47 +88,51 @@ Alternatively, you can try with Mina public nodes:
 
 ### Setup Aligned Devnet infrastructure locally
 
-1. Start Docker
+1. Clone the [Aligned repo](https://github.com/yetanotherco/aligned_layer). And checkout to the `staging` branch:
 
-1. Setup the `.env` file of the Bridge. A template is available in `.env.template`.
-    1. Set `ETH_CHAIN` to `devnet`.
-    1. Set `MINA_RPC_URL` to the URL of the Mina node GraphQL API (See [Mina node section](#mina-node)).
+```sh
+git clone https://github.com/yetanotherco/aligned_layer
+cd aligned_layer
+git checkout staging
+```
 
-1. Clone the [forked Aligned repo](https://github.com/lambdaclass/aligned_layer). Checkout to the `mina` branch.
-
-1. Run:
+2. Run:
 
     ```sh
     make deps
     ```
 
-1. Start anvil:
+3. Start anvil:
 
     ```sh
-    make anvil_start_with_block_time
+    make anvil_start
     ```
 
-1. Start the aggregator:
+4. Start the aggregator:
 
     ```sh
     make aggregator_start ENVIRONMENT=devnet
     ```
 
-1. Start the batcher:
+5. Start the batcher (needs to have docker running):
 
     ```sh
-    make batcher_start_local ENVIRONMENT=devnet
+    make batcher_start_local
     ```
 
-1. Start an operator:
+6. Start an operator:
 
     ```sh
-    make operator_register_and_start ENVIRONMENT=devnet
+    make operator_full_registration_and_start ENVIRONMENT=devnet CONFIG_FILE=config-files/config-operator-1.yaml 
     ```
 
 ### Bridge a Mina account
 
-1. In the root folder, deploy the example Bridge's contracts with:
+1. Setup the `.env` file of the Bridge. A template is available in `.env.template`.
+    1. Set `ETH_CHAIN` to `devnet`.
+    1. Set `MINA_RPC_URL` to the URL of the Mina node GraphQL API (See [Mina node section](#mina-node)).
+
+2. In the root folder, deploy the example Bridge's contracts with:
 
     ```sh
     make deploy_example_bridge_contracts
@@ -136,11 +140,11 @@ Alternatively, you can try with Mina public nodes:
   
     In the `.env` file, set `STATE_SETTLEMENT_ETH_ADDR` and `ACCOUNT_VALIDATION_ETH_ADDR` to the corresponding deployed contract addresses.
 
-1. Submit a Mina state proof to verify (**NOTE:** Because of the Aligned minimum batch size, you may need to submit two proofs to make Aligned Devnet verify them):
+3. Submit a Mina state proof to verify (**NOTE:** Because of the Aligned minimum batch size, you may need to submit two proofs to make Aligned Devnet verify them):
 
     - Run `make submit_devnet_state` if you are using Mina Devnet or `make submit_mainnet_state` if you are using Mina Mainnet.
 
-1. Submit an account to verify (**NOTE:** Because of the Aligned minimum batch size, you may need to submit two proofs to make Aligned Devnet verify them):
+4. Submit an account to verify (**NOTE:** Because of the Aligned minimum batch size, you may need to submit two proofs to make Aligned Devnet verify them):
 
     ```sh
     make submit_account PUBLIC_KEY=<string> STATE_HASH=<string>
