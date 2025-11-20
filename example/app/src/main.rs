@@ -16,6 +16,7 @@ use mina_bridge_core::{
 use std::{process, str::FromStr, time::SystemTime};
 
 const MINA_ZKAPP_ADDRESS: &str = "B62qmKCv2HaPwVRHBKrDFGUpjSh3PPY9VqSa6ZweGAmj9hBQL4pfewn";
+const TOKEN_ID: &str = "xFGpiVZhxrVsiuse2vxQKL7J3y1aqPcnVqm4kBTYNmzLR1XL5P"; // If non-TokenHolderAccout, then tokenId="1";
 const SUDOKU_VALIDITY_DEVNET_ADDRESS: &str = "0x8ce361602B935680E8DeC218b820ff5056BeB7af";
 
 sol!(
@@ -182,6 +183,7 @@ async fn main() {
                 pub_input,
             } = validate_account(
                 MINA_ZKAPP_ADDRESS,
+                TOKEN_ID,
                 &tip_state_hash,
                 &rpc_url,
                 &network,

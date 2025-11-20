@@ -115,11 +115,12 @@ pub async fn get_mina_proof_of_state(
 /// - A Merkle path from the root to the leaf both mentioned above.
 pub async fn get_mina_proof_of_account(
     public_key: &str,
+    token_id: &str,
     state_hash: &str,
     rpc_url: &str,
 ) -> Result<(MinaAccountProof, MinaAccountPubInputs), String> {
     let (account, ledger_hash, merkle_path) =
-        query_account(rpc_url, state_hash, public_key).await?;
+        query_account(rpc_url, state_hash, public_key, token_id).await?;
 
     let encoded_account = MinaAccountValidationExample::Account::try_from(&account)?.abi_encode();
 
@@ -282,6 +283,7 @@ async fn query_account(
     rpc_url: &str,
     state_hash: &str,
     public_key: &str,
+    token_id: &str
 ) -> Result<(MinaAccount, Fp, Vec<MerkleNode>), String> {
     debug!(
         "Querying account {public_key}, its merkle proof and ledger hash for state {state_hash}"
@@ -291,6 +293,7 @@ async fn query_account(
     let variables = account_query::Variables {
         state_hash: state_hash.to_owned(),
         public_key: public_key.to_owned(),
+        token: token_id.to_owned()
     };
 
     let response = post_graphql::<AccountQuery, _>(&client, rpc_url, variables)

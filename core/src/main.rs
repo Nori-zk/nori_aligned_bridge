@@ -29,6 +29,8 @@ enum Command {
         save_proof: bool,
         /// Public key string of the account to verify
         public_key: String,
+        token_id: String,
+
         /// Hash of the state to verify the account for
         state_hash: String,
     },
@@ -118,10 +120,11 @@ async fn main() {
         Command::SubmitAccount {
             save_proof,
             public_key,
+            token_id,
             state_hash,
         } => {
             let (proof, pub_input) =
-                mina::get_mina_proof_of_account(&public_key, &state_hash, &rpc_url)
+                mina::get_mina_proof_of_account(&public_key, &token_id, &state_hash, &rpc_url)
                     .await
                     .unwrap_or_else(|err| {
                         error!("{}", err);

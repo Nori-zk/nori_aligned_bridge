@@ -149,6 +149,7 @@ pub async fn update_bridge_chain(
 #[allow(clippy::too_many_arguments)]
 pub async fn validate_account(
     public_key: &str,
+    token_id: &str,
     state_hash: &str,
     rpc_url: &str,
     network: &Network,
@@ -160,7 +161,7 @@ pub async fn validate_account(
     wallet: Wallet<SigningKey>,
     save_proof: bool,
 ) -> Result<AccountVerificationData, String> {
-    let (proof, pub_input) = get_mina_proof_of_account(public_key, state_hash, rpc_url).await?;
+    let (proof, pub_input) = get_mina_proof_of_account(public_key, token_id, state_hash, rpc_url).await?;
 
     let verification_data = submit(
         MinaProof::Account((proof, pub_input.clone())),
