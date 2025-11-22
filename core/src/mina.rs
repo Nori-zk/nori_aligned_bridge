@@ -47,7 +47,7 @@ struct StateQuery;
 /// A query for the state hashes and proofs of the transition frontier.
 struct BestChainQuery;
 
-#[derive(GraphQLQuery)]
+#[derive(GraphQLQuery, Debug)]
 #[graphql(
     schema_path = "graphql/mina_schema.json",
     query_path = "graphql/account_query.graphql"
