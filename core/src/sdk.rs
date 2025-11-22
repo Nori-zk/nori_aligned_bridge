@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use aligned_sdk::common::types::{AlignedVerificationData, Network, VerificationDataCommitment};
 use ethers::{core::k256::ecdsa::SigningKey, signers::Wallet};
-use log::debug;
+use log::info;
 use mina_p2p_messages::v2::StateHash;
 
 use crate::{

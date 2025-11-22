@@ -1,7 +1,7 @@
 use aligned_sdk::common::types::Network;
 extern crate dotenv;
 use dotenv::dotenv;
-use log::debug;
+use log::info;
 
 use super::constants::{
     ANVIL_BATCHER_ADDR, ANVIL_BATCHER_ETH_ADDR, ANVIL_ETH_RPC_URL, PROOF_GENERATOR_ADDR,
