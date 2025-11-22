@@ -1,5 +1,5 @@
-query AccountQuery($stateHash: String!, $publicKey: String!, $tokenId: String!) {
-    encodedSnarkedLedgerAccountMembership(accountInfos: {publicKey: $publicKey, token: $tokenId}, stateHash: $stateHash) {
+query AccountQuery($stateHash: String!, $publicKey: String!, $token: String!) {
+    encodedSnarkedLedgerAccountMembership(accountInfos: {publicKey: $publicKey, token: $token}, stateHash: $stateHash) {
         account
         merklePath {
           left
