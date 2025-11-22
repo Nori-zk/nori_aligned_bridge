@@ -302,6 +302,8 @@ async fn query_account(
         .data
         .ok_or("Missing merkle query response data".to_string())?;
 
+    dbg!(&response); 
+
     let membership = response
         .encoded_snarked_ledger_account_membership
         .first()
