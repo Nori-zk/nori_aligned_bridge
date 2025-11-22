@@ -47,7 +47,7 @@ struct StateQuery;
 /// A query for the state hashes and proofs of the transition frontier.
 struct BestChainQuery;
 
-#[derive(GraphQLQuery, Debug)]
+#[derive(GraphQLQuery)]
 #[graphql(
     schema_path = "graphql/mina_schema.json",
     query_path = "graphql/account_query.graphql"
@@ -303,8 +303,6 @@ async fn query_account(
         .map_err(|err| err.to_string())?
         .data
         .ok_or("Missing merkle query response data".to_string())?;
-
-    dbg!(&response); 
 
     let membership = response
         .encoded_snarked_ledger_account_membership
