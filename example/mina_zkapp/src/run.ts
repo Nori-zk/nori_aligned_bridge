@@ -25,7 +25,7 @@ Mina.setActiveInstance(Network);
 // define zkapp and create sudoku to upload
 const zkApp = new SudokuZkApp(zkAppAddress);
 await fetchAccount({ publicKey: zkAppAddress });
-console.log('Is the sudoku solved?', zkApp.isSolved.get().toBoolean());
+console.log('Is the sudoku solved?', (await zkApp.isSolved.fetch())!.toBoolean());
 
 const sudoku = generateSudoku(0.5);
 
@@ -49,7 +49,7 @@ await trySendTx({ sender: feepayerAddress, fee }, async () => {
   await zkApp.submitSolution(Sudoku.from(sudoku), Sudoku.from(solution!));
 });
 
-console.log('Is the sudoku solved?', zkApp.isSolved.get().toBoolean());
+console.log('Is the sudoku solved?', (await zkApp.isSolved.fetch())!.toBoolean());
 
 async function trySendTx(sender: Mina.FeePayerSpec, f: () => Promise<void>) {
   for (let i = 1; i <= TX_MAX_TRIES; i++) {
