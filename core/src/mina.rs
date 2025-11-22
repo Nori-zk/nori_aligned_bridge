@@ -286,7 +286,7 @@ async fn query_account(
     token_id: &str
 ) -> Result<(MinaAccount, Fp, Vec<MerkleNode>), String> {
     info!(
-        "Querying account {public_key}, its merkle proof and ledger hash for state {state_hash}"
+        "Querying account[public_key:{public_key}, token_id:{token_id}], its merkle proof and ledger hash for state {state_hash}"
     );
     let client = reqwest::Client::new();
 
