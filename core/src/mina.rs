@@ -291,10 +291,12 @@ async fn query_account(
     let client = reqwest::Client::new();
 
     let variables = account_query::Variables {
-        state_hash: state_hash.to_owned(),
-        public_key: public_key.to_owned(),
-        token: token_id.to_owned()
-    };
+            state_hash: state_hash.to_owned(),
+            account_infos: vec![account_query::AccountInput {
+                public_key: public_key.to_owned(),
+                token: token_id.to_owned(),
+            }],
+        };
 
     let response = post_graphql::<AccountQuery, _>(&client, rpc_url, variables)
         .await
