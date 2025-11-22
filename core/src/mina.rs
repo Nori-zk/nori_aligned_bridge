@@ -56,6 +56,9 @@ struct BestChainQuery;
 /// merkle path.
 struct AccountQuery;
 
+type TokenId = String;
+type PublicKey = String;
+
 /// Queries the Mina state from the Mina Node and returns the proof that the queried Mina state is the last finalized state
 /// of the blockchain.
 /// This proof along its public inputs are structured so that they can be sent to Aligned Layer to be verified.
@@ -291,16 +294,30 @@ async fn query_account(
     let client = reqwest::Client::new();
 
     let variables = account_query::Variables {
-            state_hash: state_hash.to_owned(),
-            account_infos: vec![account_query::AccountInput {
-                public_key: public_key.to_owned(),
-                token: token_id.to_owned(),
-            }],
-        };
+        state_hash: state_hash.to_owned(),
+        account_infos: vec![account_query::AccountInput {
+            public_key: public_key.to_owned(),
+            token: Some(token_id.to_owned()),
+        }],
+    };
 
-    let response = post_graphql::<AccountQuery, _>(&client, rpc_url, variables)
+    let request_body = AccountQuery::build_query(variables);
+    info!("Sending request to {}: {:?}", rpc_url, serde_json::to_string(&request_body).unwrap());
+
+    let response = client
+        .post(rpc_url)
+        .json(&request_body)
+        .send()
         .await
-        .map_err(|err| err.to_string())?
+        .map_err(|e| e.to_string())?;
+
+    let response_text = response.text().await.map_err(|e| e.to_string())?;
+    info!("Raw response body: {}", response_text);
+
+    let response: graphql_client::Response<account_query::ResponseData> =
+        serde_json::from_str(&response_text).map_err(|e| format!("Failed to parse JSON: {}", e))?;
+
+    let response = response
         .data
         .ok_or("Missing merkle query response data".to_string())?;
 
