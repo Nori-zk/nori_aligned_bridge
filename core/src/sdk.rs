@@ -101,7 +101,7 @@ pub async fn update_bridge_chain(
     if pub_input.candidate_chain_state_hashes
         == get_bridge_chain_state_hashes(state_settlement_addr, eth_rpc_url).await?
     {
-        debug!("The bridge chain is updated to the candidate chain");
+        info!("The bridge chain is updated to the candidate chain");
         return Err("Latest chain is already verified".to_string());
     }
 

@@ -40,7 +40,7 @@ fn load_var_or(key: &str, default: &str, network: &Network) -> Result<String, St
     match std::env::var(key) {
         Ok(value) => Ok(value),
         Err(_) if matches!(network, Network::Devnet) => {
-            debug!("Using default {} for devnet: {}", key, default);
+            info!("Using default {} for devnet: {}", key, default);
             Ok(default.to_string())
         }
         Err(err) => Err(format!(
@@ -69,11 +69,11 @@ impl EnvironmentVariables {
             .as_str()
         {
             "devnet" => {
-                debug!("Selected Anvil devnet chain.");
+                info!("Selected Anvil devnet chain.");
                 Network::Devnet
             }
             "holesky" => {
-                debug!("Selected Holesky chain.");
+                info!("Selected Holesky chain.");
                 Network::Holesky
             }
             _ => return Err(

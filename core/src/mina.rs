@@ -124,7 +124,7 @@ pub async fn get_mina_proof_of_account(
 
     let encoded_account = MinaAccountValidationExample::Account::try_from(&account)?.abi_encode();
 
-    debug!(
+    info!(
         "Retrieved proof of account for ledger {}",
         LedgerHash::from_fp(ledger_hash)
     );
@@ -148,7 +148,7 @@ async fn query_state(
     let variables = state_query::Variables {
         state_hash: state_hash.to_string(),
     };
-    debug!("Querying state {}", variables.state_hash);
+    info!("Querying state {}", variables.state_hash);
     let client = reqwest::Client::new();
     let proof = post_graphql::<StateQuery, _>(&client, rpc_url, variables)
         .await
@@ -179,7 +179,7 @@ async fn query_candidate_chain(
     ),
     String,
 > {
-    debug!("Querying for candidate state");
+    info!("Querying for candidate state");
     let client = reqwest::blocking::Client::new();
     let variables = best_chain_query::Variables {
         max_length: BRIDGE_TRANSITION_FRONTIER_LEN
@@ -248,8 +248,8 @@ async fn query_candidate_chain(
                 .map_err(|err| format!("Couldn't read state proof binprot: {err}"))
         })?;
 
-    debug!("Queried state hashes: {chain_state_hashes:?}");
-    debug!("Queried ledger hashes: {chain_ledger_hashes:?}");
+    info!("Queried state hashes: {chain_state_hashes:?}");
+    info!("Queried ledger hashes: {chain_ledger_hashes:?}");
 
     Ok((
         chain_states,
@@ -285,7 +285,7 @@ async fn query_account(
     public_key: &str,
     token_id: &str
 ) -> Result<(MinaAccount, Fp, Vec<MerkleNode>), String> {
-    debug!(
+    info!(
         "Querying account {public_key}, its merkle proof and ledger hash for state {state_hash}"
     );
     let client = reqwest::Client::new();
@@ -315,7 +315,7 @@ async fn query_account(
                 .map_err(|err| format!("Failed to deserialize account binprot: {err}"))
         })?;
 
-    debug!(
+    info!(
         "Queried account {} with token id {}",
         account.public_key,
         account.token_id //Into::<TokenIdKeyHash>::into(account.token_id.clone())

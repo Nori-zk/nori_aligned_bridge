@@ -201,7 +201,7 @@ async fn main() {
                 process::exit(1);
             });
 
-            debug!("Creating contract instance");
+            info!("Creating contract instance");
             let contract =
                 SudokuValidity::new(Address::from_str(&sudoku_address).unwrap(), provider);
 

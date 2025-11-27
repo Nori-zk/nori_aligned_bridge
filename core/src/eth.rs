@@ -179,7 +179,7 @@ pub async fn update_chain(
     let batcher_payment_service = Address::from_str(batcher_payment_service)
         .map_err(|err| format!("Failed to parse batcher payment service address: {err}"))?;
 
-    debug!("Creating contract instance");
+    info!("Creating contract instance");
     let mina_bridge_contract = mina_bridge_contract(eth_rpc_url, bridge_eth_addr, network, wallet)?;
 
     let AlignedVerificationData {
@@ -202,7 +202,7 @@ pub async fn update_chain(
         ..
     } = verification_data_commitment;
 
-    debug!("Updating contract");
+    info!("Updating contract");
 
     let update_call = mina_bridge_contract.update_chain(
         proof_commitment,
@@ -249,7 +249,7 @@ pub async fn update_chain(
     info!("Checking that the state hashes were stored correctly..");
 
     // TODO(xqft): do the same for ledger hashes
-    debug!("Getting network state hashes");
+    info!("Getting network state hashes");
     let new_network_state_hashes = get_bridge_chain_state_hashes(contract_addr, eth_rpc_url)
         .await
         .map_err(|err| err.to_string())?;
@@ -279,7 +279,7 @@ pub async fn get_bridge_tip_hash(
 ) -> Result<SolStateHash, String> {
     let bridge_eth_addr = Address::from_str(contract_addr).map_err(|err| err.to_string())?;
 
-    debug!("Creating contract instance");
+    info!("Creating contract instance");
     let mina_bridge_contract = mina_bridge_contract_call_only(eth_rpc_url, bridge_eth_addr)?;
 
     let state_hash_bytes = mina_bridge_contract
@@ -306,7 +306,7 @@ pub async fn get_bridge_chain_state_hashes(
 ) -> Result<[StateHash; BRIDGE_TRANSITION_FRONTIER_LEN], String> {
     let bridge_eth_addr = Address::from_str(contract_addr).map_err(|err| err.to_string())?;
 
-    debug!("Creating contract instance");
+    info!("Creating contract instance");
     let mina_bridge_contract = mina_bridge_contract_call_only(eth_rpc_url, bridge_eth_addr)?;
 
     mina_bridge_contract
@@ -347,7 +347,7 @@ pub async fn validate_account(
     let provider = Provider::<Http>::try_from(eth_rpc_url).map_err(|err| err.to_string())?;
     let bridge_eth_addr = Address::from_str(contract_addr).map_err(|err| err.to_string())?;
 
-    debug!("Creating contract instance");
+    info!("Creating contract instance");
 
     let contract = mina_account_validation_contract_call_only(eth_rpc_url, bridge_eth_addr)?;
 
@@ -378,7 +378,7 @@ pub async fn validate_account(
         ..
     } = verification_data_commitment;
 
-    debug!("Validating account");
+    info!("Validating account");
 
     let aligned_args = AlignedArgs {
         proof_commitment,
@@ -490,7 +490,7 @@ fn mina_bridge_contract(
     };
     let signer = SignerMiddleware::new(eth_rpc_provider, wallet.with_chain_id(network_id));
     let client = Arc::new(signer);
-    debug!("contract address: {contract_address}");
+    info!("contract address: {contract_address}");
     Ok(MinaStateSettlementExampleEthereum::new(
         contract_address,
         client,
