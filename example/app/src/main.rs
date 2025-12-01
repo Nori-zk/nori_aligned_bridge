@@ -18,6 +18,8 @@ use std::{process, str::FromStr, time::SystemTime};
 const MINA_ZKAPP_ADDRESS: &str = "B62qmKCv2HaPwVRHBKrDFGUpjSh3PPY9VqSa6ZweGAmj9hBQL4pfewn";
 const TOKEN_ID: &str = "xFGpiVZhxrVsiuse2vxQKL7J3y1aqPcnVqm4kBTYNmzLR1XL5P"; // If non-TokenHolderAccout, then tokenId="1";
 const SUDOKU_VALIDITY_DEVNET_ADDRESS: &str = "0x8ce361602B935680E8DeC218b820ff5056BeB7af";
+const STATE_SETTLEMENT_DEVNET_ADDRESS: &str = "0x8ce361602B935680E8DeC218b820ff5056BeB7af";
+const ACCT_VALIDATION_DEVNET_ADDRESS: &str = "0x8ce361602B935680E8DeC218b820ff5056BeB7af";
 
 sol!(
     #[allow(clippy::too_many_arguments)]
@@ -37,6 +39,7 @@ struct Cli {
 enum Command {
     DeployContract,
     ValidateSolution,
+    UnlockNoriToken
 }
 
 #[tokio::main]
@@ -217,6 +220,121 @@ async fn main() {
             );
 
             info!("Sending transaction to SudokuValidity contract...");
+            let tx = call.send().await;
+
+            match tx {
+                Ok(tx) => {
+                    let receipt = tx.get_receipt().await.unwrap_or_else(|err| {
+                        error!("{}", err);
+                        process::exit(1);
+                    });
+                    let new_timestamp: U256 = contract
+                        .getLatestSolutionTimestamp()
+                        .call()
+                        .await
+                        .unwrap_or_else(|err| {
+                            error!("{}", err);
+                            process::exit(1);
+                        })
+                        ._0;
+
+                    info!(
+                        "SudokuValidity contract was updated! transaction hash: {}, gas cost: {}, new timestamp: {}",
+                        receipt.transaction_hash, receipt.gas_used, new_timestamp
+                    );
+                }
+                Err(err) => error!("SudokuValidity transaction failed!: {err}"),
+            }
+        }
+        Command::UnlockNoriToken => {
+            let wallet =
+                wallet::get_wallet(&network, keystore_path.as_deref(), private_key.as_deref())
+                    .unwrap_or_else(|err| {
+                        error!("{}", err);
+                        process::exit(1);
+                    });
+
+            let state_verification_result = update_bridge_chain(
+                &rpc_url,
+                &network,
+                &state_settlement_addr,
+                &batcher_addr,
+                &eth_rpc_url,
+                &proof_generator_addr,
+                wallet.clone(),
+                &batcher_eth_addr,
+                true,
+                false,
+            )
+            .await;
+
+            match state_verification_result {
+                Err(err) if err == "Latest chain is already verified" => {
+                    info!("Bridge chain is up to date, won't verify new states.")
+                }
+                Err(err) => {
+                    error!("{}", err);
+                    process::exit(1);
+                }
+                _ => {}
+            }
+
+            let tip_state_hash =
+                get_bridged_chain_tip_state_hash(&state_settlement_addr, &eth_rpc_url)
+                    .await
+                    .unwrap_or_else(|err| {
+                        error!("{}", err);
+                        process::exit(1);
+                    });
+
+            info!("tip state hash: {}", &tip_state_hash);
+
+            let AccountVerificationData {
+                proof_commitment,
+                proving_system_aux_data_commitment,
+                proof_generator_addr,
+                batch_merkle_root,
+                merkle_proof,
+                verification_data_batch_index,
+                pub_input,
+            } = validate_account(
+                MINA_ZKAPP_ADDRESS,
+                TOKEN_ID,
+                &tip_state_hash,
+                &rpc_url,
+                &network,
+                &account_validation_addr,
+                &batcher_addr,
+                &eth_rpc_url,
+                &proof_generator_addr,
+                &batcher_eth_addr,
+                wallet,
+                false,
+            )
+            .await
+            .unwrap_or_else(|err| {
+                error!("{}", err);
+                process::exit(1);
+            });
+            
+            info!("Creating contract instance");
+            let _stateSettlementAddr = ;
+            let _accountValidationAddr = ;
+            let contract =
+                NoriTokenBridge::new(Address::from_str(STATE_SETTLEMENT_DEVNET_ADDRESS).unwrap(), Address::from_str(ACCT_VALIDATION_DEVNET_ADDRESS).unwrap(), provider);
+
+            let call = contract.unlockTokens(
+                proof_commitment.into(),
+                proving_system_aux_data_commitment.into(),
+                proof_generator_addr.into(),
+                batch_merkle_root.into(),
+                merkle_proof.into(),
+                U256::from(verification_data_batch_index),
+                pub_input.into(),
+                Address::from_str(&batcher_eth_addr).unwrap(),
+            );
+
+            info!("Sending transaction to NoriTokenBridge contract...");
             let tx = call.send().await;
 
             match tx {
