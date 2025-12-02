@@ -318,6 +318,7 @@ async fn query_account(
     */
 
     let response_text = include_str!("../accoun_query_response.json");
+    info!("Raw response body: {}", response_text);
 
     let response: graphql_client::Response<account_query::ResponseData> =
         serde_json::from_str(&response_text).map_err(|e| format!("Failed to parse JSON: {}", e))?;
