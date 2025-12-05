@@ -293,7 +293,7 @@ async fn query_account(
     );
     let client = reqwest::Client::new();
 
-    /*
+    
     let variables = account_query::Variables {
         state_hash: state_hash.to_owned(),
         account_infos: vec![account_query::AccountInput {
@@ -315,11 +315,11 @@ async fn query_account(
 
     let response_text = response.text().await.map_err(|e| e.to_string())?;
     info!("Raw response body: {}", response_text);
-    */
 
+    /*
     let response_text = include_str!("../accoun_query_response.json");
     info!("Raw response body: {}", response_text);
-
+    */
     let response: graphql_client::Response<account_query::ResponseData> =
         serde_json::from_str(&response_text).map_err(|e| format!("Failed to parse JSON: {}", e))?;
 
