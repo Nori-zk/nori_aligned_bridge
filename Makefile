@@ -14,6 +14,7 @@ gen_contract_abis:
 	forge build --root example/eth_contract
 	cp contract/out/MinaStateSettlementExample.sol/MinaStateSettlementExample.json core/abi/MinaStateSettlementExample.json
 	cp contract/out/MinaAccountValidationExample.sol/MinaAccountValidationExample.json core/abi/MinaAccountValidationExample.json
+	cp contract/out/NoriTokenBridge.sol/NoriTokenBridge.json core/abi/NoriTokenBridge.json
 	cp example/eth_contract/out/SudokuValidity.sol/SudokuValidity.json example/app/abi/SudokuValidity.json
 
 deploy_example_bridge_contracts:

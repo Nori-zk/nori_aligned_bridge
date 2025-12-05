@@ -26,15 +26,26 @@ abigen!(
     MinaAccountValidationExampleEthereumContract,
     "abi/MinaAccountValidationExample.json"
 );
+abigen!(
+    NoriTokenBridgeEthereumContract,
+    "abi/NoriTokenBridge.json"
+);
 
 type MinaStateSettlementExampleEthereum = MinaStateSettlementExampleEthereumContract<
+    SignerMiddleware<Provider<Http>, Wallet<SigningKey>>,
+>;
+type NoriTokenBridgeEthereum = NoriTokenBridgeEthereumContract<
     SignerMiddleware<Provider<Http>, Wallet<SigningKey>>,
 >;
 
 type MinaStateSettlementExampleEthereumCallOnly =
     MinaStateSettlementExampleEthereumContract<Provider<Http>>;
+
 type MinaAccountValidationExampleEthereumCallOnly =
     MinaAccountValidationExampleEthereumContract<Provider<Http>>;
+
+type NoriTokenBridgeEthereumCallOnly = 
+    NoriTokenBridgeEthereumContract<Provider<Http>>;
 
 sol!(
     #[allow(clippy::too_many_arguments)]
@@ -48,6 +59,13 @@ sol!(
     #[sol(rpc)]
     MinaAccountValidationExample,
     "abi/MinaAccountValidationExample.json"
+);
+
+sol!(
+    #[allow(clippy::too_many_arguments)]
+    #[sol(rpc)]
+    NoriTokenBridge,
+    "abi/NoriTokenBridge.json"
 );
 
 // Define constant values that will be used for gas limits and calculations
@@ -475,6 +493,36 @@ pub async fn deploy_mina_account_validation_example_contract(
     Ok(*address)
 }
 
+/// Deploys the Nori Token Bridge Contract on Ethereum
+pub async fn deploy_nori_token_bridge_contract(
+    eth_rpc_url: &str,
+    state_settlement_addr: alloy::primitives::Address,
+    account_validation_addr: alloy::primitives::Address,
+    wallet: &EthereumWallet,
+) -> Result<alloy::primitives::Address, String> {
+    let provider = ProviderBuilder::new()
+        .with_recommended_fillers()
+        .wallet(wallet)
+        .on_http(reqwest::Url::parse(eth_rpc_url).map_err(|err| err.to_string())?);
+
+    let contract = NoriTokenBridge::deploy(
+        &provider,
+        state_settlement_addr,
+        account_validation_addr,
+    )
+    .await
+    .map_err(|err| err.to_string())?;
+    let address = contract.address();
+
+    info!(
+        "Nori Token Bridge contract successfuly deployed with address {}",
+        address
+    );
+    info!("Set NORI_TOKEN_BRIDGE_ETH_ADDR={}", address);
+
+    Ok(*address)
+}
+
 fn mina_bridge_contract(
     eth_rpc_url: &str,
     contract_address: Address,
@@ -518,6 +566,19 @@ fn mina_account_validation_contract_call_only(
         Provider::<Http>::try_from(eth_rpc_url).map_err(|err| err.to_string())?;
     let client = Arc::new(eth_rpc_provider);
     Ok(MinaAccountValidationExampleEthereumCallOnly::new(
+        contract_address,
+        client,
+    ))
+}
+
+fn nori_token_bridge_contract_call_only(
+    eth_rpc_url: &str,
+    contract_address: Address,
+) -> Result<NoriTokenBridgeEthereumCallOnly, String> {
+    let eth_rpc_provider =
+        Provider::<Http>::try_from(eth_rpc_url).map_err(|err| err.to_string())?;
+    let client = Arc::new(eth_rpc_provider);
+    Ok(NoriTokenBridgeEthereumCallOnly::new(
         contract_address,
         client,
     ))

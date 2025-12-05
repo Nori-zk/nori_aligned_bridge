@@ -3,6 +3,7 @@ use log::{debug, error, info};
 use mina_bridge_core::{
     eth::{
         deploy_mina_account_validation_example_contract, deploy_mina_bridge_example_contract,
+        deploy_nori_token_bridge_contract,
         MinaAccountValidationExampleConstructorArgs, MinaStateSettlementExampleConstructorArgs,
         SolStateHash,
     },
@@ -77,7 +78,7 @@ async fn main() {
         });
 
     // Contract for Devnet state proofs
-    deploy_mina_bridge_example_contract(&eth_rpc_url, &bridge_constructor_args, &wallet, true)
+    let devnet_bridge_addr =deploy_mina_bridge_example_contract(&eth_rpc_url, &bridge_constructor_args, &wallet, true)
         .await
         .unwrap_or_else(|err| {
             error!("Failed to deploy contract: {err}");
@@ -92,7 +93,7 @@ async fn main() {
             process::exit(1);
         });
 
-    deploy_mina_account_validation_example_contract(
+    let account_validation_addr = deploy_mina_account_validation_example_contract(
         &eth_rpc_url,
         account_constructor_args,
         &wallet,
@@ -102,4 +103,17 @@ async fn main() {
         error!("Failed to deploy contract: {err}");
         process::exit(1);
     });
+
+    deploy_nori_token_bridge_contract(
+        &eth_rpc_url,
+        devnet_bridge_addr,
+        account_validation_addr,
+        &wallet,
+    )
+    .await
+    .unwrap_or_else(|err| {
+        error!("Failed to deploy NoriTokenBridge: {err}");
+        process::exit(1);
+    });
+
 }
