@@ -81,7 +81,7 @@ async fn main() {
     });
 
     let sudoku_address = match network {
-        Network::Devnet => &sudoku_validity_devnet_addr.to_string(),
+        Network::Devnet => sudoku_validity_devnet_addr.to_string(),
         Network::Holesky => std::env::var("SUDOKU_VALIDITY_HOLESKY_ADDRESS").unwrap_or_else(|_| {
             error!("Error getting Sudoku vality contract address");
             process::exit(1);
