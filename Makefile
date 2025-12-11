@@ -29,6 +29,6 @@ execute_example:
 	npm run build; \
 	node build/src/run.js
 	cargo run --manifest-path example/app/Cargo.toml --release -- validate-solution
-	
+
 execute_example_unlock_nori_token:
-    @cargo run --manifest-path example/app/Cargo.toml --release -- unlock-nori-token
+	@cargo run --manifest-path example/app/Cargo.toml --release -- unlock-nori-token
