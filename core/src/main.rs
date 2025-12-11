@@ -53,6 +53,12 @@ async fn main() {
         proof_generator_addr,
         keystore_path,
         private_key,
+        sudoku_zkapp_addr,
+        sudoku_token_id,
+        sudoku_validity_devnet_addr,
+        nori_token_storage_zkapp_addr,
+        nori_token_controller_token_id,
+        nori_token_bridge_devnet_addr,
     } = EnvironmentVariables::new().unwrap_or_else(|err| {
         error!("{}", err);
         process::exit(1);
