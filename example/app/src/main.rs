@@ -15,17 +15,18 @@ use mina_bridge_core::{
 };
 use std::{process, str::FromStr, time::SystemTime};
 
-const MINA_ZKAPP_ADDRESS: &str = "B62qmKCv2HaPwVRHBKrDFGUpjSh3PPY9VqSa6ZweGAmj9hBQL4pfewn";
-const TOKEN_ID: &str = "xFGpiVZhxrVsiuse2vxQKL7J3y1aqPcnVqm4kBTYNmzLR1XL5P"; // If non-TokenHolderAccout, then tokenId="1";
-const SUDOKU_VALIDITY_DEVNET_ADDRESS: &str = "0x8ce361602B935680E8DeC218b820ff5056BeB7af";
-const STATE_SETTLEMENT_DEVNET_ADDRESS: &str = "0x8ce361602B935680E8DeC218b820ff5056BeB7af";
-const ACCT_VALIDATION_DEVNET_ADDRESS: &str = "0x8ce361602B935680E8DeC218b820ff5056BeB7af";
-
 sol!(
     #[allow(clippy::too_many_arguments)]
     #[sol(rpc)]
     SudokuValidity,
     "abi/SudokuValidity.json"
+);
+
+sol!(
+    #[allow(clippy::too_many_arguments)]
+    #[sol(rpc)]
+    NoriTokenBridge,
+    "abi/NoriTokenBridge.json"
 );
 
 #[derive(Parser)]
@@ -59,6 +60,12 @@ async fn main() {
         proof_generator_addr,
         keystore_path,
         private_key,
+        sudoku_zkapp_addr,
+        sudoku_token_id,
+        sudoku_validity_devnet_addr,
+        nori_token_storage_zkapp_addr,
+        nori_token_controller_token_id,
+        nori_token_bridge_devnet_addr,
     } = EnvironmentVariables::new().unwrap_or_else(|err| {
         error!("{}", err);
         process::exit(1);
@@ -74,7 +81,7 @@ async fn main() {
     });
 
     let sudoku_address = match network {
-        Network::Devnet => SUDOKU_VALIDITY_DEVNET_ADDRESS.to_string(),
+        Network::Devnet => &sudoku_validity_devnet_addr.to_string(),
         Network::Holesky => std::env::var("SUDOKU_VALIDITY_HOLESKY_ADDRESS").unwrap_or_else(|_| {
             error!("Error getting Sudoku vality contract address");
             process::exit(1);
@@ -185,8 +192,8 @@ async fn main() {
                 verification_data_batch_index,
                 pub_input,
             } = validate_account(
-                MINA_ZKAPP_ADDRESS,
-                TOKEN_ID,
+                &sudoku_zkapp_addr,
+                &sudoku_token_id,
                 &tip_state_hash,
                 &rpc_url,
                 &network,
@@ -298,8 +305,8 @@ async fn main() {
                 verification_data_batch_index,
                 pub_input,
             } = validate_account(
-                MINA_ZKAPP_ADDRESS,
-                TOKEN_ID,
+                &nori_token_storage_zkapp_addr,
+                &nori_token_controller_token_id,
                 &tip_state_hash,
                 &rpc_url,
                 &network,
@@ -318,12 +325,11 @@ async fn main() {
             });
             
             info!("Creating contract instance");
-            let _stateSettlementAddr = ;
-            let _accountValidationAddr = ;
-            let contract =
-                NoriTokenBridge::new(Address::from_str(STATE_SETTLEMENT_DEVNET_ADDRESS).unwrap(), Address::from_str(ACCT_VALIDATION_DEVNET_ADDRESS).unwrap(), provider);
+            let contract = NoriTokenBridge::new(Address::from_str(&nori_token_bridge_devnet_addr).unwrap(), provider);
 
+            let toUnlockAmount = U256::from(1_000_000_000_000_000_000u64); // 1 ETH
             let call = contract.unlockTokens(
+                toUnlockAmount,
                 proof_commitment.into(),
                 proving_system_aux_data_commitment.into(),
                 proof_generator_addr.into(),
@@ -343,22 +349,13 @@ async fn main() {
                         error!("{}", err);
                         process::exit(1);
                     });
-                    let new_timestamp: U256 = contract
-                        .getLatestSolutionTimestamp()
-                        .call()
-                        .await
-                        .unwrap_or_else(|err| {
-                            error!("{}", err);
-                            process::exit(1);
-                        })
-                        ._0;
 
                     info!(
-                        "SudokuValidity contract was updated! transaction hash: {}, gas cost: {}, new timestamp: {}",
-                        receipt.transaction_hash, receipt.gas_used, new_timestamp
+                        "NoriTokenBridge contract was updated! transaction hash: {}, gas cost: {}",
+                        receipt.transaction_hash, receipt.gas_used
                     );
                 }
-                Err(err) => error!("SudokuValidity transaction failed!: {err}"),
+                Err(err) => error!("NoriTokenBridge transaction failed!: {err}"),
             }
         }
     }
