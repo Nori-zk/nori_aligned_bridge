@@ -5,7 +5,7 @@ SHELL=/bin/bash
 PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 # 日志配置
-LOG_FILE="/var/log/hourly_task.log"
+LOG_FILE="~/hourly_task.log"
 TIMESTAMP=$(date "+%Y-%m-%d %H:%M:%S")
 
 # 任务内容示例（根据需求修改）
