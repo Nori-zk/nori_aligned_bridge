@@ -1,16 +1,16 @@
 use std::{process, str::FromStr};
 
 use aligned_sdk::{
-    core::types::{
+    common::types::{
         AlignedVerificationData, FeeEstimationType, Network, ProvingSystemId, VerificationData,
     },
-    sdk::estimate_fee,
+    verification_layer::estimate_fee,
 };
 
 use ethers::{
     core::k256::ecdsa::SigningKey,
-    signers::Wallet,
-    types::{Address, U256},
+    signers::{Signer, Wallet},
+    types::Address,
 };
 use futures::TryFutureExt;
 use log::{error, info};
@@ -84,17 +84,23 @@ pub async fn submit(
     let max_fee = estimate_fee(eth_rpc_url, FeeEstimationType::Instant)
         .map_err(|err| err.to_string())
         .await?;
+    let nonce =
+        aligned_sdk::verification_layer::get_nonce_from_batcher(network.clone(), wallet.address())
+            .await
+            .map_err(|_| "Error while retrieving nonce from aligned batcher".to_string())?;
 
     info!("Max fee: {max_fee} gas");
+    info!("Nonce: {nonce}");
 
     info!("Submitting {proof_name} into Aligned and waiting for the batch to be verified...");
-    aligned_sdk::sdk::submit_and_wait_verification(
+
+    aligned_sdk::verification_layer::submit_and_wait_verification(
         eth_rpc_url,
         network.to_owned(),
         &verification_data,
         max_fee,
         wallet,
-        U256::from(0),
+        nonce,
     )
     .await
     .map_err(|e| e.to_string())
