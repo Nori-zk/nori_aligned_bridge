@@ -107,6 +107,8 @@ impl EnvironmentVariables {
 
         let keystore_path = std::env::var("KEYSTORE_PATH").ok();
         let private_key = std::env::var("PRIVATE_KEY").ok();
+        info!("KEYSTORE_PATH: {:?}", keystore_path);
+        info!("PRIVATE_KEY: {:?}", private_key);
 
         if keystore_path.is_some() && private_key.is_some() {
             return Err(
