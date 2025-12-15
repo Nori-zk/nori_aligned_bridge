@@ -1,7 +1,10 @@
 use aligned_sdk::common::types::Network;
 use alloy::{
+    network::EthereumWallet,
     primitives::{Address, U256},
-    providers::ProviderBuilder,
+    providers::{Provider, ProviderBuilder},
+    rpc::types::TransactionRequest,
+    signers::local::PrivateKeySigner,
     sol_types::sol,
 };
 use clap::{Parser, Subcommand};
@@ -40,7 +43,15 @@ struct Cli {
 enum Command {
     DeployContract,
     ValidateSolution,
-    UnlockNoriToken
+    UnlockNoriToken,
+    Transfer {
+        #[arg(short, long)]
+        private_key: String,
+        #[arg(short, long)]
+        to: String,
+        #[arg(short, long)]
+        amount: String,
+    },
 }
 
 #[tokio::main]
@@ -328,6 +339,17 @@ async fn main() {
             let contract = NoriTokenBridge::new(Address::from_str(&nori_token_bridge_devnet_addr).unwrap(), provider);
 
             let toUnlockAmount = U256::from(1_000_000_000_000_000_000u64); // 1 ETH
+            info!("Unlock params:");
+            info!("toUnlockAmount: {}", toUnlockAmount);
+            info!("proof_commitment: {}", hex::encode(proof_commitment));
+            info!("proving_system_aux_data_commitment: {}", hex::encode(proving_system_aux_data_commitment));
+            info!("proof_generator_addr: {}", hex::encode(proof_generator_addr));
+            info!("batch_merkle_root: {}", hex::encode(batch_merkle_root));
+            info!("merkle_proof: {}", hex::encode(&merkle_proof));
+            info!("verification_data_batch_index: {}", verification_data_batch_index);
+            info!("pub_input: {}", hex::encode(&pub_input));
+            info!("batcher_eth_addr: {}", &batcher_eth_addr);
+
             let call = contract.unlockTokens(
                 toUnlockAmount,
                 proof_commitment.into(),
@@ -357,6 +379,42 @@ async fn main() {
                 }
                 Err(err) => error!("NoriTokenBridge transaction failed!: {err}"),
             }
+        }
+        Command::Transfer { private_key, to, amount } => {
+            let signer: PrivateKeySigner = private_key.parse().expect("Invalid private key");
+            let wallet = EthereumWallet::from(signer);
+            
+            let provider = ProviderBuilder::new()
+                .with_recommended_fillers()
+                .wallet(wallet)
+                .on_http(
+                    reqwest::Url::parse(&eth_rpc_url)
+                        .map_err(|err| err.to_string())
+                        .unwrap(),
+                );
+            
+            let to_addr = Address::from_str(&to).expect("Invalid to address");
+            let amount_val = U256::from_str_radix(&amount, 10).unwrap_or_else(|_| U256::from_str(&amount).expect("Invalid amount"));
+
+            let tx = TransactionRequest::default()
+                .with_to(to_addr)
+                .with_value(amount_val);
+            
+            info!("Sending {} wei to {}", amount_val, to_addr);
+            
+            let tx_hash = provider.send_transaction(tx).await
+                .unwrap_or_else(|err| {
+                    error!("Failed to send transaction: {}", err);
+                    process::exit(1);
+                })
+                .watch()
+                .await
+                .unwrap_or_else(|err| {
+                    error!("Failed to watch transaction: {}", err);
+                    process::exit(1);
+                });
+                
+            info!("Transaction confirmed: {}", tx_hash);
         }
     }
 
