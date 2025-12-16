@@ -21,6 +21,9 @@ gen_contract_abis:
 deploy_example_bridge_contracts:
 	@cargo run --manifest-path contract_deployer/Cargo.toml --release
 
+deploy_nori_token_bridge_contract:
+	@cargo run --manifest-path contract_deployer/Cargo.toml --release --bin deploy_nori_bridge
+
 deploy_example_app_contracts:
 	@cargo run --manifest-path example/app/Cargo.toml --release -- deploy-contract
 
