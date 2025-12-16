@@ -103,12 +103,13 @@ async fn main() {
         error!("Failed to deploy contract: {err}");
         process::exit(1);
     });
-
+    
     deploy_nori_token_bridge_contract(
         &eth_rpc_url,
         devnet_bridge_addr,
         account_validation_addr,
         &wallet,
+        Some(10 * (10_u128.pow(18)) as u128 ),
     )
     .await
     .unwrap_or_else(|err| {

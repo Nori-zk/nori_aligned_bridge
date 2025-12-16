@@ -499,20 +499,26 @@ pub async fn deploy_nori_token_bridge_contract(
     state_settlement_addr: alloy::primitives::Address,
     account_validation_addr: alloy::primitives::Address,
     wallet: &EthereumWallet,
+    initial_balance: Option<u128>,
 ) -> Result<alloy::primitives::Address, String> {
     let provider = ProviderBuilder::new()
         .with_recommended_fillers()
         .wallet(wallet)
         .on_http(reqwest::Url::parse(eth_rpc_url).map_err(|err| err.to_string())?);
 
-    let contract = NoriTokenBridge::deploy(
+    let builder = NoriTokenBridge::deploy_builder(
         &provider,
         state_settlement_addr,
         account_validation_addr,
-    )
-    .await
-    .map_err(|err| err.to_string())?;
-    let address = contract.address();
+    );
+
+    let builder = if let Some(balance) = initial_balance {
+        builder.value(alloy::primitives::U256::from(balance))
+    } else {
+        builder
+    };
+
+    let address = builder.deploy().await.map_err(|err| err.to_string())?;
 
     info!(
         "Nori Token Bridge contract successfuly deployed with address {}",
@@ -520,7 +526,7 @@ pub async fn deploy_nori_token_bridge_contract(
     );
     info!("Set NORI_TOKEN_BRIDGE_ETH_ADDR={}", address);
 
-    Ok(*address)
+    Ok(address)
 }
 
 fn mina_bridge_contract(
