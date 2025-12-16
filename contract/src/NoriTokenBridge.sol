@@ -50,7 +50,7 @@ contract NoriTokenBridge {
     // -------------------------------
     // Constructor
     // -------------------------------
-    constructor(address _stateSettlementAddr, address _accountValidationAddr) {
+    constructor(address _stateSettlementAddr, address _accountValidationAddr) payable{
         bridgeOperator = msg.sender;
         
         stateSettlement = MinaStateSettlementExample(_stateSettlementAddr);
