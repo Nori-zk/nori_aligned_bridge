@@ -34,5 +34,4 @@ execute_example_unlock_nori_token:
 	@cargo run --manifest-path example/app/Cargo.toml --release -- unlock-nori-token
 
 execute_example_transfer:
-	@cargo run --manifest-path example/app/Cargo.toml --release -- transfer ${PRIVATE_KEY} ${TO} ${AMOUNT} 
-
+	@cargo run --manifest-path example/app/Cargo.toml --release -- transfer --private-key ${PRIVATE_KEY} --to ${TO} --amount ${AMOUNT}
