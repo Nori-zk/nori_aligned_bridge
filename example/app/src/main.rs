@@ -397,8 +397,8 @@ async fn main() {
             let amount_val = U256::from_str_radix(&amount, 10).unwrap_or_else(|_| U256::from_str(&amount).expect("Invalid amount"));
 
             let tx = TransactionRequest::default()
-                .with_to(to_addr)
-                .with_value(amount_val);
+                .to(to_addr)
+                .value(amount_val);
             
             info!("Sending {} wei to {}", amount_val, to_addr);
             
