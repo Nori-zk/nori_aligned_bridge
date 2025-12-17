@@ -144,7 +144,9 @@ contract NoriTokenBridge {
 
         // transfer the tokens to the user
         address receiver = address(uint160(uint256(account.zkapp.appState[3])));
-        totalLocked -= toUnlockAmount;
+
+        // TST
+        // totalLocked -= toUnlockAmount;
         payable(receiver).transfer(toUnlockAmount);
 
         emit TokensUnlocked(pubKeyTokenIdHash, toUnlockAmount, receiver, block.timestamp);
