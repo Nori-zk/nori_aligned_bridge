@@ -50,7 +50,7 @@ contract NoriTokenBridge {
     // -------------------------------
     // Constructor
     // -------------------------------
-    constructor(address _stateSettlementAddr, address _accountValidationAddr) payable{
+    constructor(address _stateSettlementAddr, address _accountValidationAddr) payable /*TODO Keep Payable for TEST(Mina->ETHEREUM)*/{
         bridgeOperator = msg.sender;
         
         stateSettlement = MinaStateSettlementExample(_stateSettlementAddr);
@@ -145,7 +145,7 @@ contract NoriTokenBridge {
         // transfer the tokens to the user
         address receiver = address(uint160(uint256(account.zkapp.appState[3])));
 
-        // TST
+        // TODO FOR TEST-ALIGN
         // totalLocked -= toUnlockAmount;
         payable(receiver).transfer(toUnlockAmount);
 
