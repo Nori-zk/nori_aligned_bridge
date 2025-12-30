@@ -1,21 +1,26 @@
-use std::{process, str::FromStr};
+use std::process;
+use std::str::FromStr;
 
 use aligned_sdk::{
     common::types::{
         AlignedVerificationData, FeeEstimationType, Network, ProvingSystemId, VerificationData,
+        Wallet,
     },
     verification_layer::estimate_fee,
 };
 
-use ethers::{
-    core::k256::ecdsa::SigningKey,
-    signers::{Signer, Wallet},
-    types::Address,
-};
+use alloy::primitives::Address;
+use ethers::signers::Signer;
 use futures::TryFutureExt;
 use log::{error, info};
 
-use crate::proof::MinaProof;
+use crate::{
+    proof::MinaProof,
+    utils::{
+        constants::{ANVIL_CHAIN_ID, HOLESKY_CHAIN_ID},
+        wallet::WalletData,
+    },
+};
 
 /// Submits a Mina Proof to Aligned's batcher and waits until the batch is verified.
 #[allow(clippy::too_many_arguments)]
@@ -25,7 +30,7 @@ pub async fn submit(
     proof_generator_addr: &str,
     _batcher_addr: &str,
     eth_rpc_url: &str,
-    wallet: Wallet<SigningKey>,
+    wallet: WalletData,
     save_proof: bool,
 ) -> Result<AlignedVerificationData, String> {
     let (proof, pub_input, proving_system, proof_name, file_name) = match proof {
@@ -71,6 +76,26 @@ pub async fn submit(
     let proof_generator_addr =
         Address::from_str(proof_generator_addr).map_err(|err| err.to_string())?;
 
+    let chain_id = match network {
+        Network::Devnet => ANVIL_CHAIN_ID,
+        Network::Holesky => HOLESKY_CHAIN_ID,
+        _ => ANVIL_CHAIN_ID,
+    };
+
+    let wallet = Wallet::from_bytes(&wallet.private_key_bytes)
+        .map_err(|err| format!("Failed to create wallet from bytes: {err}"))?
+        .with_chain_id(chain_id);
+
+    // Aligned SDK expects ethers types for VerificationData.
+    // Since we don't have ethers imported as a dependency, we rely on aligned-sdk types.
+    // However, aligned-sdk uses ethers types internally.
+    // The proof_generator_addr in VerificationData is ethers::types::Address.
+    // We need to convert alloy::Address to ethers::Address.
+    // We can do this by converting to bytes and then to ethers address.
+
+    let proof_generator_addr_bytes: [u8; 20] = proof_generator_addr.into_array();
+    let proof_generator_addr_ethers = ethers::types::H160::from(proof_generator_addr_bytes);
+
     let verification_data = VerificationData {
         proving_system,
         proof,
@@ -78,7 +103,7 @@ pub async fn submit(
         // Use this instead of `None` to force Aligned to include the commitment to the proving system ID (valid for Aligned 0.7.0)
         verification_key: Some(vec![]),
         vm_program_code: None,
-        proof_generator_addr,
+        proof_generator_addr: proof_generator_addr_ethers,
     };
 
     let max_fee = estimate_fee(eth_rpc_url, FeeEstimationType::Instant)

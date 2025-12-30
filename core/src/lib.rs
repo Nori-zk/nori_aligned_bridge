@@ -10,5 +10,7 @@ pub mod proof;
 pub mod sdk;
 /// Solidity-friendly data structures and serialization.
 pub mod sol;
+/// Nori token bridge operations
+pub mod nori;
 /// Internal utils.
 pub mod utils;

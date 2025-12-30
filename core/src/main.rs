@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use log::{error, info};
 use mina_bridge_core::{
-    aligned, eth, mina,
+    aligned, eth, mina, nori,
     proof::MinaProof,
     utils::{env::EnvironmentVariables, wallet::get_wallet},
 };
@@ -34,6 +34,15 @@ enum Command {
         /// Hash of the state to verify the account for
         state_hash: String,
     },
+    UnlockNoriToken {
+        /// Public key string of the account to unlock
+        public_key: String,
+        /// Token id string of the fungible token to unlock
+        token_id: String,
+        /// Amount of Nori tokens to unlock (in ether, supports decimals)
+        #[arg(short, long)]
+        to_unlock_amount: f64
+    },
 }
 
 #[tokio::main]
@@ -53,12 +62,7 @@ async fn main() {
         proof_generator_addr,
         keystore_path,
         private_key,
-        sudoku_zkapp_addr,
-        sudoku_token_id,
-        sudoku_validity_devnet_addr,
-        nori_token_storage_zkapp_addr,
-        nori_token_controller_token_id,
-        nori_token_bridge_devnet_addr,
+        nori_token_bridge_eth_addr,
     } = EnvironmentVariables::new().unwrap_or_else(|err| {
         error!("{}", err);
         process::exit(1);
@@ -73,7 +77,7 @@ async fn main() {
         process::exit(1);
     });
 
-    let wallet = get_wallet(&network, keystore_path.as_deref(), private_key.as_deref())
+    let wallet_data = get_wallet(&network, keystore_path.as_deref(), private_key.as_deref())
         .unwrap_or_else(|err| {
             error!("{}", err);
             process::exit(1);
@@ -99,7 +103,7 @@ async fn main() {
                 &proof_generator_addr,
                 &batcher_addr,
                 &eth_rpc_url,
-                wallet.clone(),
+                wallet_data.clone(),
                 save_proof,
             )
             .await
@@ -113,7 +117,7 @@ async fn main() {
                 &pub_input,
                 &network,
                 &eth_rpc_url,
-                wallet,
+                wallet_data,
                 &state_settlement_addr,
                 &batcher_eth_addr,
             )
@@ -143,7 +147,7 @@ async fn main() {
                 &proof_generator_addr,
                 &batcher_addr,
                 &eth_rpc_url,
-                wallet.clone(),
+                wallet_data.clone(),
                 save_proof,
             )
             .await
@@ -165,6 +169,37 @@ async fn main() {
             } else {
                 info!("Mina account {public_key} was validated!");
             };
+        }
+        Command::UnlockNoriToken { to_unlock_amount , public_key, token_id } => {
+            // Convert floating ETH amount to 18-decimal base units
+            if !to_unlock_amount.is_finite() || to_unlock_amount.is_sign_negative() {
+                error!("to_unlock_amount must be a non-negative finite number");
+                process::exit(1);
+            }
+            let wei_f = to_unlock_amount * 1e18_f64;
+            if wei_f > (u128::MAX as f64) {
+                error!("to_unlock_amount is too large");
+                process::exit(1);
+            }
+            let to_unlock_amount_wei = wei_f.round() as u128;
+
+            nori::unlock_nori_token(
+                &rpc_url,
+                &network,
+                &state_settlement_addr,
+                &batcher_addr,
+                &eth_rpc_url,
+                &proof_generator_addr,
+                &batcher_eth_addr,
+                keystore_path.as_deref(),
+                private_key.as_deref(),
+                &public_key,
+                &token_id,
+                &account_validation_addr,
+                &nori_token_bridge_eth_addr,
+                to_unlock_amount_wei,
+            )
+            .await;
         }
     }
 

@@ -27,7 +27,7 @@ use super::constants::{
 /// - `sudoku_validity_devnet_addr`: Address of the Sudoku validity contract on Devnet
 /// - `nori_token_storage_zkapp_addr`: Address of the NoriTokenStorage zkApp
 /// - `nori_token_controller_token_id`: Token ID of the NoriTokenController zkApp
-/// - `nori_token_bridge_devnet_addr`: Address of the NoriTokenBridge contract on Devnet
+/// - `nori_token_bridge_eth_addr`: Address of the NoriTokenBridge contract on Devnet
 pub struct EnvironmentVariables {
     pub rpc_url: String,
     pub network: Network,
@@ -39,14 +39,7 @@ pub struct EnvironmentVariables {
     pub proof_generator_addr: String,
     pub keystore_path: Option<String>,
     pub private_key: Option<String>,
-
-    pub sudoku_zkapp_addr: String,
-    pub sudoku_token_id: String,
-    pub sudoku_validity_devnet_addr: String,
-
-    pub nori_token_storage_zkapp_addr: String,
-    pub nori_token_controller_token_id: String,
-    pub nori_token_bridge_devnet_addr: String,
+    pub nori_token_bridge_eth_addr: String,
 }
 
 fn load_var_or(key: &str, default: &str, network: &Network) -> Result<String, String> {
@@ -117,19 +110,8 @@ impl EnvironmentVariables {
             );
         }
 
-        let sudoku_zkapp_addr = std::env::var("SUDOKU_ZKAPP_ADDRESS")
-            .map_err(|err| format!("Couldn't get SUDOKU_ZKAPP_ADDRESS env. variable: {err}"))?;
-        let sudoku_token_id = std::env::var("SUDOKU_TOKEN_ID")
-            .map_err(|err| format!("Couldn't get SUDOKU_TOKEN_ID env. variable: {err}"))?;
-        let sudoku_validity_devnet_addr = std::env::var("SUDOKU_VALIDITY_DEVNET_ADDRESS")
-            .map_err(|err| format!("Couldn't get SUDOKU_VALIDITY_DEVNET_ADDRESS env. variable: {err}"))?;
-
-        let nori_token_storage_zkapp_addr = std::env::var("NORI_TOKEN_STORAGE_ZKAPP_ADDRESS")
-            .map_err(|err| format!("Couldn't get NORI_TOKEN_STORAGE_ZKAPP_ADDRESS env. variable: {err}"))?;
-        let nori_token_controller_token_id = std::env::var("NORI_TOKEN_CONTROLLER_TOKEN_ID")
-            .map_err(|err| format!("Couldn't get NORI_TOKEN_CONTROLLER_TOKEN_ID env. variable: {err}"))?;
-        let nori_token_bridge_devnet_addr = std::env::var("NORI_TOKEN_BRIDGE_DEVNET_ADDRESS")
-            .map_err(|err| format!("Couldn't get NORI_TOKEN_BRIDGE_DEVNET_ADDRESS env. variable: {err}"))?;
+        let nori_token_bridge_eth_addr = std::env::var("NORI_TOKEN_BRIDGE_ETH_ADDRESS")
+            .map_err(|err| format!("Couldn't get NORI_TOKEN_BRIDGE_ETH_ADDRESS env. variable: {err}"))?;
 
         Ok(EnvironmentVariables {
             rpc_url,
@@ -142,12 +124,7 @@ impl EnvironmentVariables {
             proof_generator_addr,
             keystore_path,
             private_key,
-            sudoku_zkapp_addr,
-            sudoku_token_id,
-            sudoku_validity_devnet_addr,
-            nori_token_storage_zkapp_addr,
-            nori_token_controller_token_id,
-            nori_token_bridge_devnet_addr,
+            nori_token_bridge_eth_addr,
         })
     }
 }

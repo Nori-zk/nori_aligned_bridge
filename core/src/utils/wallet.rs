@@ -1,18 +1,22 @@
-use std::str::FromStr;
-
 use aligned_sdk::common::types::Network;
-use ethers::{
-    prelude::k256::ecdsa::SigningKey,
-    signers::{LocalWallet, Signer, Wallet},
+use alloy::{
+    network::EthereumWallet,
+    signers::{local::{LocalSigner, PrivateKeySigner}},
 };
-
 use log::info;
 use zeroize::Zeroizing;
 
-use crate::utils::constants::{ANVIL_CHAIN_ID, ANVIL_PRIVATE_KEY, HOLESKY_CHAIN_ID};
+use crate::utils::constants::ANVIL_PRIVATE_KEY;
 
-/// Returns the `Wallet` struct defined in the `ethers` crate.
-/// This wallet is used to sign Ethereum transactions (e.g.: Aligned batches or example contract function calls).
+#[derive(Clone)]
+pub struct WalletData {
+    pub wallet: EthereumWallet,
+    pub private_key_bytes: Vec<u8>,
+}
+
+/// Returns the `Wallet` struct defined in the `alloy` crate and the private key bytes.
+/// This wallet is used to sign Ethereum example contract deployments.
+/// The private key bytes are used to reconstruct the wallet in `ethers` for aligned-sdk compatibility.
 ///
 /// If `keystore_path` is defined it stops execution, prompts on the TTY and then reads the password from TTY.
 ///
@@ -25,7 +29,7 @@ pub fn get_wallet(
     network: &Network,
     keystore_path: Option<&str>,
     private_key: Option<&str>,
-) -> Result<Wallet<SigningKey>, String> {
+) -> Result<WalletData, String> {
     if keystore_path.is_some() && private_key.is_some() {
         return Err(
             "Both keystore and private key env. variables are defined. Choose only one."
@@ -40,14 +44,23 @@ pub fn get_wallet(
                 rpassword::prompt_password("Please enter your keystore password:")
                     .map_err(|err| err.to_string())?,
             );
-            Wallet::decrypt_keystore(keystore_path, password).map_err(|err| err.to_string())
+            let signer = LocalSigner::decrypt_keystore(keystore_path, password)
+                .map_err(|err| err.to_string())?;
+            let bytes = signer.to_bytes().to_vec();
+            Ok(WalletData {
+                wallet: EthereumWallet::new(signer),
+                private_key_bytes: bytes,
+            })
         } else if let Some(private_key) = private_key {
             info!("Using private key for Holesky wallet");
-            let wallet = private_key
-                .parse::<LocalWallet>()
-                .map_err(|err| err.to_string())?;
-
-            Ok(wallet.with_chain_id(HOLESKY_CHAIN_ID))
+            let signer: PrivateKeySigner = private_key
+                .parse()
+                .map_err(|_| "Failed to get Anvil signer".to_string())?;
+            let bytes = signer.to_bytes().to_vec();
+            Ok(WalletData {
+                wallet: EthereumWallet::new(signer),
+                private_key_bytes: bytes,
+            })
         } else {
             return Err(
                 "Holesky chain was selected but couldn't find KEYSTORE_PATH or PRIVATE_KEY."
@@ -56,9 +69,13 @@ pub fn get_wallet(
         }
     } else {
         info!("Using Anvil wallet 9");
-        let wallet = LocalWallet::from_str(ANVIL_PRIVATE_KEY)
-            .map_err(|err| format!("Failed to create Anvil wallet: {}", err))?;
-
-        Ok(wallet.with_chain_id(ANVIL_CHAIN_ID))
+        let signer: PrivateKeySigner = ANVIL_PRIVATE_KEY
+            .parse()
+            .map_err(|_| "Failed to get Anvil signer".to_string())?;
+        let bytes = signer.to_bytes().to_vec();
+        Ok(WalletData {
+            wallet: EthereumWallet::new(signer),
+            private_key_bytes: bytes,
+        })
     }
 }

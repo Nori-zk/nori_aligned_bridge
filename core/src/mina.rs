@@ -8,7 +8,7 @@ use graphql_client::{
     GraphQLQuery,
 };
 use kimchi::mina_curves::pasta::Fp;
-use log::{debug, info};
+use log::info;
 use mina_p2p_messages::{
     binprot::BinProtRead,
     v2::{

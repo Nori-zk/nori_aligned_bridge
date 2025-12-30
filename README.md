@@ -6,7 +6,6 @@ Docs and utils for the Zero-knowledge state bridge from Mina to Ethereum
 
 - [About](#about)
 - [Usage](#usage)
-- [Example use case](#example-use-case)
 - [Table of Contents](#table-of-contents)
 - [Specification](#specification)
   - [core](#core)
@@ -132,15 +131,28 @@ git checkout staging
 
 1. Setup the `.env` file of the Bridge. A template is available in `.env.template`.
     1. Set `ETH_CHAIN` to `devnet`.
-    1. Set `MINA_RPC_URL` to the URL of the Mina node GraphQL API (See [Mina node section](#mina-node)).
+    2. Set `MINA_RPC_URL` to the URL of the Mina node GraphQL API (See [Mina node section](#mina-node)).
 
 2. In the root folder, deploy the example Bridge's contracts with:
 
     ```sh
-    make deploy_example_bridge_contracts
+    gen_contract_abis
+
+    make deploy_all_bridge_contracts NORI_TOKEN_BRIDGE_INITIAL_BALANCE=<string>
     ```
+
+    Where:
+    - NORI_TOKEN_BRIDGE_INITIAL_BALANCE is expressed in **ether** (e.g., `1` means 1 $ETH, `1.123` means 1.123 $ETH).
   
-    In the `.env` file, set `STATE_SETTLEMENT_ETH_ADDR` and `ACCOUNT_VALIDATION_ETH_ADDR` to the corresponding deployed contract addresses.
+    In the `.env` file, set `STATE_SETTLEMENT_ETH_ADDR`, `ACCOUNT_VALIDATION_ETH_ADDR` and `NORI_TOKEN_BRIDGE_ETH_ADDRESS` to the corresponding deployed contract addresses.
+
+    If you expect to re-deploy NoriTokenBridge contract only, kindly re-exec 
+    
+    ```sh
+    make deploy_nori_token_bridge_contract NORI_TOKEN_BRIDGE_INITIAL_BALANCE=<string>
+    ```
+    
+    and later update `NORI_TOKEN_BRIDGE_ETH_ADDRESS` in `.env`.
 
 3. Submit a Mina state proof to verify:
 
@@ -149,56 +161,28 @@ git checkout staging
 4. Submit an account to verify:
 
     ```sh
-    make submit_account PUBLIC_KEY=<string> STATE_HASH=<string>
+    make submit_account PUBLIC_KEY=<string> TOKEN_ID=<string> STATE_HASH=<string>
     ```
 
     Where:
     - `PUBLIC_KEY` is the public key of the Mina account you want to verify
+    - `TOKEN_ID` is the token id of the fungible token owned by `NoriBridgeController` Mina Contract.
     - `STATE_HASH` is the hash of a Mina state that was verified in Ethereum
-  
-## Example use case
 
-The `example/` folder contains a project that uses the Sudoku zkApp example from Mina and bridges its state to a SudokuValidity Ethereum smart contract.
+5. Unlock $ETH from NoriTokenBridge smart contract
 
-For running the example you need to:
+   You first need trigger `NoriBridgeController.alignedLock()` to burn $ETH fungible token on Mina side.
 
-1. [Setup Aligned Devnet locally](https://github.com/yetanotherco/aligned_layer/blob/staging/docs/3_guides/6_setup_aligned.md#booting-devnet-with-default-configs)
+   and then:
 
-2. Deploy the example bridge smart contracts by executing
+   ```sh
+   make unlock_nori_token PUBLIC_KEY=<string> TOKEN_ID=<string> TO_UNLOCK_AMOUNT=<string>
+   ```
 
-    ```sh
-    make deploy_example_bridge_contracts
-    ```
-
-3. Deploy the SudokuValidity smart contract by executing
-
-    ```sh
-    make deploy_example_app_contracts
-    ```
-
-4. Install `zkapp-cli`:
-
-    ```sh
-    npm install -g zkapp-cli
-    ```
-
-5. Inside the `example/mina_zkapp` directory, configure the zkApp and deploy the contract following [this guide](https://docs.minaprotocol.com/zkapps/writing-a-zkapp/introduction-to-zkapps/how-to-deploy-a-zkapp) on the Mina Protocol documentation
-
-6. After deployment, set the `zkappAddress` field on `example/mina_zkapp/config.json`
-
-7. Set the environment variables in a `.env` file accordingly. A template can be found in `.env.template`.
-
-8. Run the example by executing from the root folder:
-
-    ```sh
-    make execute_example
-    ```
-
-    this will upload a new Sudoku, submit a solution to it and run the example Rust app that will bridge the new state of the zkApp and update the SudokuValidty smart contract on Ethereum.
-
-    The zkApp will wait until both Mina transactions are included in a block, so this may take a while. Below is a diagram explaining the execution flow:
-
-![Example diagram](/img/example_diagram.png)
+    Where:
+    - `PUBLIC_KEY` is the public key of the Mina account you want to verify
+    - `TOKEN_ID` is the token id of the fungible token owned by `NoriBridgeController` Mina Contract.
+    - `TO_UNLOCK_AMOUNT` is expressed in **ether** (e.g., `1` means 1 $ETH, `1.123` means 1.123 $ETH).
 
 ## Specification
 
