@@ -1,12 +1,10 @@
 use aligned_sdk::common::types::Network;
 use alloy::{
     network::EthereumWallet,
-    signers::{local::{LocalSigner, PrivateKeySigner}},
+    signers::local::{LocalSigner, PrivateKeySigner},
 };
 use log::info;
 use zeroize::Zeroizing;
-
-use crate::utils::constants::ANVIL_PRIVATE_KEY;
 
 #[derive(Clone)]
 pub struct WalletData {
@@ -37,39 +35,22 @@ pub fn get_wallet(
         );
     }
 
-    if matches!(network, Network::Holesky) {
-        if let Some(keystore_path) = keystore_path {
-            info!("Using keystore for Holesky wallet");
-            let password = Zeroizing::new(
-                rpassword::prompt_password("Please enter your keystore password:")
-                    .map_err(|err| err.to_string())?,
-            );
-            let signer = LocalSigner::decrypt_keystore(keystore_path, password)
-                .map_err(|err| err.to_string())?;
-            let bytes = signer.to_bytes().to_vec();
-            Ok(WalletData {
-                wallet: EthereumWallet::new(signer),
-                private_key_bytes: bytes,
-            })
-        } else if let Some(private_key) = private_key {
-            info!("Using private key for Holesky wallet");
-            let signer: PrivateKeySigner = private_key
-                .parse()
-                .map_err(|_| "Failed to get Anvil signer".to_string())?;
-            let bytes = signer.to_bytes().to_vec();
-            Ok(WalletData {
-                wallet: EthereumWallet::new(signer),
-                private_key_bytes: bytes,
-            })
-        } else {
-            return Err(
-                "Holesky chain was selected but couldn't find KEYSTORE_PATH or PRIVATE_KEY."
-                    .to_string(),
-            );
-        }
-    } else {
-        info!("Using Anvil wallet 9");
-        let signer: PrivateKeySigner = ANVIL_PRIVATE_KEY
+    if let Some(keystore_path) = keystore_path {
+        info!("Using keystore for Holesky wallet");
+        let password = Zeroizing::new(
+            rpassword::prompt_password("Please enter your keystore password:")
+                .map_err(|err| err.to_string())?,
+        );
+        let signer = LocalSigner::decrypt_keystore(keystore_path, password)
+            .map_err(|err| err.to_string())?;
+        let bytes = signer.to_bytes().to_vec();
+        Ok(WalletData {
+            wallet: EthereumWallet::new(signer),
+            private_key_bytes: bytes,
+        })
+    } else if let Some(private_key) = private_key {
+        info!("Using private key for Holesky wallet");
+        let signer: PrivateKeySigner = private_key
             .parse()
             .map_err(|_| "Failed to get Anvil signer".to_string())?;
         let bytes = signer.to_bytes().to_vec();
@@ -77,5 +58,10 @@ pub fn get_wallet(
             wallet: EthereumWallet::new(signer),
             private_key_bytes: bytes,
         })
+    } else {
+        return Err(
+            "couldn't find KEYSTORE_PATH or PRIVATE_KEY."
+                .to_string(),
+        );
     }
 }

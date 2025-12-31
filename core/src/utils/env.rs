@@ -100,18 +100,23 @@ impl EnvironmentVariables {
 
         let keystore_path = std::env::var("KEYSTORE_PATH").ok();
         let private_key = std::env::var("PRIVATE_KEY").ok();
-        info!("KEYSTORE_PATH: {:?}", keystore_path);
-        info!("PRIVATE_KEY: {:?}", private_key);
 
         if keystore_path.is_some() && private_key.is_some() {
             return Err(
                 "Both keystore and private key env. variables are defined. Choose only one."
                     .to_string(),
             );
+        } else if keystore_path.is_none() && private_key.is_none() {
+            return Err(
+                "Neither keystore nor private key env. variables are defined."
+                    .to_string(),
+            );
         }
 
-        let nori_token_bridge_eth_addr = std::env::var("NORI_TOKEN_BRIDGE_ETH_ADDRESS")
-            .map_err(|err| format!("Couldn't get NORI_TOKEN_BRIDGE_ETH_ADDRESS env. variable: {err}"))?;
+        let nori_token_bridge_eth_addr =
+            std::env::var("NORI_TOKEN_BRIDGE_ETH_ADDRESS").map_err(|err| {
+                format!("Couldn't get NORI_TOKEN_BRIDGE_ETH_ADDRESS env. variable: {err}")
+            })?;
 
         Ok(EnvironmentVariables {
             rpc_url,
