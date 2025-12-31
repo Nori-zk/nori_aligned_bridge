@@ -144,7 +144,7 @@ git checkout staging
     Where:
     - NORI_TOKEN_BRIDGE_INITIAL_BALANCE is expressed in **ether** (e.g., `1` means 1 $ETH, `1.123` means 1.123 $ETH).
   
-    In the `.env` file, set `STATE_SETTLEMENT_ETH_ADDR`, `ACCOUNT_VALIDATION_ETH_ADDR` and `NORI_TOKEN_BRIDGE_ETH_ADDRESS` to the corresponding deployed contract addresses.
+    In the `.env` file, set `STATE_SETTLEMENT_ETH_ADDR`, `ACCOUNT_VALIDATION_ETH_ADDR` and `NORI_TOKEN_BRIDGE_ETH_ADDRESS` to the corresponding deployed contract addresses.(tips: For convenience, the program generates a file (seen in screen logs, whose name is prefixed with `.generated.contract.addresses.{%Y%m%d%H%M%S}`) recording the three env parameters, just open it and copy them into .env)
 
     If you expect to re-deploy NoriTokenBridge contract only, kindly re-exec 
     
@@ -771,4 +771,5 @@ The ``final_ledger`` (epoch ledger of the k-th predecessor from the tip) is upda
 
 For a joining peer to discover the head of the current chain it MUST not only obtain the tip, but also the min(k, tip.height - 1)-th block back from the tip. For the latter the peer MUST check the block's proof of finality.  
 Peers perform the proof of finality check by verifying two zero-knowledge proofs, one for the _tip_ and one for the _root_, and a Merkle proof for the chain of protocol state hashes between them.
+
 
