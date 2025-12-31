@@ -36,7 +36,6 @@ pub fn get_wallet(
     }
 
     if let Some(keystore_path) = keystore_path {
-        info!("Using keystore for Holesky wallet");
         let password = Zeroizing::new(
             rpassword::prompt_password("Please enter your keystore password:")
                 .map_err(|err| err.to_string())?,
@@ -49,10 +48,9 @@ pub fn get_wallet(
             private_key_bytes: bytes,
         })
     } else if let Some(private_key) = private_key {
-        info!("Using private key for Holesky wallet");
         let signer: PrivateKeySigner = private_key
             .parse()
-            .map_err(|_| "Failed to get Anvil signer".to_string())?;
+            .map_err(|_| "Failed to get signer".to_string())?;
         let bytes = signer.to_bytes().to_vec();
         Ok(WalletData {
             wallet: EthereumWallet::new(signer),
