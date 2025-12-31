@@ -17,6 +17,7 @@ use mina_bridge_core::{
 };
 use rust_decimal::{prelude::ToPrimitive, Decimal};
 use std::{fs, process, str::FromStr};
+use chrono::Local;
 
 #[derive(Parser, Debug)]
 #[command(version, about)]
@@ -163,13 +164,15 @@ async fn main() {
             });
 
             // log in local filesystem
+            let ts = Local::now().format("%Y%m%d%H%M%S");
+            let filename = format!(".generated.contract.addresses.{}", ts);
             let generated_addresses = format!(
                 "STATE_SETTLEMENT_ETH_ADDR={}\nACCOUNT_VALIDATION_ETH_ADDR={}\nNORI_TOKEN_BRIDGE_ETH_ADDRESS={}\n",
                 state_settlement_addr, account_validation_addr, nori_token_bridge_addr
             );
 
-            fs::write(".generated.contract.addresses", generated_addresses).unwrap_or_else(|err| {
-                error!("Failed to write .generated.contract.addresses: {err}");
+            fs::write(&filename, generated_addresses).unwrap_or_else(|err| {
+                error!("Failed to write {filename}: {err}");
                 process::exit(1);
             });
 
@@ -238,13 +241,15 @@ async fn main() {
             });
             
             // log in local filesystem
+            let ts = Local::now().format("%Y%m%d%H%M%S");
+            let filename = format!(".generated.contract.addresses.{}", ts);
             let generated_addresses = format!(
                 "STATE_SETTLEMENT_ETH_ADDR={}\nACCOUNT_VALIDATION_ETH_ADDR={}\nNORI_TOKEN_BRIDGE_ETH_ADDRESS={}\n",
                 state_settlement_addr, account_validation_addr, nori_token_bridge_addr
             );
 
-            fs::write(".generated.contract.addresses", generated_addresses).unwrap_or_else(|err| {
-                error!("Failed to write .generated.contract.addresses: {err}");
+            fs::write(&filename, generated_addresses).unwrap_or_else(|err| {
+                error!("Failed to write {filename}: {err}");
                 process::exit(1);
             });
 
