@@ -16,7 +16,7 @@ use mina_bridge_core::{
     },
 };
 use rust_decimal::{prelude::ToPrimitive, Decimal};
-use std::{process, str::FromStr};
+use std::{fs, process, str::FromStr};
 
 #[derive(Parser, Debug)]
 #[command(version, about)]
@@ -114,13 +114,13 @@ async fn main() {
                 Network::Holesky => false,
                 _ => {
                     error!(
-                "Unrecognized chain, possible values for ETH_CHAIN are \"devnet\" and \"holesky\"."
-                    .to_owned());
+                        "Unrecognized chain, possible values for ETH_CHAIN are \"devnet\" and \"holesky\"."
+                    );
                     process::exit(1);
                 }
             };
 
-            let devnet_bridge_addr = deploy_mina_bridge_example_contract(
+            let state_settlement_addr = deploy_mina_bridge_example_contract(
                 &eth_rpc_url,
                 &bridge_constructor_args,
                 &wallet_data.wallet,
@@ -149,9 +149,9 @@ async fn main() {
                     process::exit(1);
                 });
 
-            deploy_nori_token_bridge_contract(
+            let nori_token_bridge_addr = deploy_nori_token_bridge_contract(
                 &eth_rpc_url,
-                devnet_bridge_addr,
+                state_settlement_addr,
                 account_validation_addr,
                 &wallet_data.wallet,
                 initial_balance_wei,
@@ -159,6 +159,17 @@ async fn main() {
             .await
             .unwrap_or_else(|err| {
                 error!("Failed to deploy NoriTokenBridge: {err}");
+                process::exit(1);
+            });
+
+            // log in local filesystem
+            let generated_addresses = format!(
+                "STATE_SETTLEMENT_ETH_ADDR={}\nACCOUNT_VALIDATION_ETH_ADDR={}\nNORI_TOKEN_BRIDGE_ETH_ADDRESS={}\n",
+                state_settlement_addr, account_validation_addr, nori_token_bridge_addr
+            );
+
+            fs::write(".generated.contract.addresses", generated_addresses).unwrap_or_else(|err| {
+                error!("Failed to write .generated.contract.addresses: {err}");
                 process::exit(1);
             });
         }
