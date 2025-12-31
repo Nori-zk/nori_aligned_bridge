@@ -5,9 +5,8 @@ use log::{debug, error, info};
 use mina_bridge_core::{
     eth::{
         deploy_mina_account_validation_example_contract, deploy_mina_bridge_example_contract,
-        deploy_nori_token_bridge_contract,
-        MinaAccountValidationExampleConstructorArgs, MinaStateSettlementExampleConstructorArgs,
-        SolStateHash,
+        deploy_nori_token_bridge_contract, MinaAccountValidationExampleConstructorArgs,
+        MinaStateSettlementExampleConstructorArgs, SolStateHash,
     },
     mina::query_root,
     utils::{
@@ -16,7 +15,7 @@ use mina_bridge_core::{
         wallet::get_wallet,
     },
 };
-use rust_decimal::{Decimal, prelude::ToPrimitive};
+use rust_decimal::{prelude::ToPrimitive, Decimal};
 use std::{process, str::FromStr};
 
 #[derive(Parser, Debug)]
@@ -88,21 +87,19 @@ async fn main() {
                 process::exit(1);
             });
 
-            let bridge_constructor_args = MinaStateSettlementExampleConstructorArgs::new(
+            let bridge_constructor_args =
+                MinaStateSettlementExampleConstructorArgs::new(&aligned_sm_addr, root_hash)
+                    .unwrap_or_else(|err| {
+                        error!("Failed to make constructor args for bridge contract call: {err}");
+                        process::exit(1);
+                    });
+            let account_constructor_args = MinaAccountValidationExampleConstructorArgs::new(
                 &aligned_sm_addr,
-                root_hash,
             )
             .unwrap_or_else(|err| {
-                error!("Failed to make constructor args for bridge contract call: {err}");
+                error!("Failed to make constructor args for account contract call: {err}");
                 process::exit(1);
             });
-            let account_constructor_args =
-                MinaAccountValidationExampleConstructorArgs::new(&aligned_sm_addr).unwrap_or_else(
-                    |err| {
-                        error!("Failed to make constructor args for account contract call: {err}");
-                        process::exit(1);
-                    },
-                );
 
             let wallet_data =
                 get_wallet(&network, keystore_path.as_deref(), private_key.as_deref())
@@ -112,24 +109,19 @@ async fn main() {
                     });
 
             // Contract for Devnet state proofs
+            let is_state_proof_from_devnet =match network {
+                Network::Devnet => true,
+                Network::Holesky => false,
+                            _ => return Err(
+                "Unrecognized chain, possible values for ETH_CHAIN are \"devnet\" and \"holesky\"."
+                    .to_owned()),
+            };
+
             let devnet_bridge_addr = deploy_mina_bridge_example_contract(
                 &eth_rpc_url,
                 &bridge_constructor_args,
                 &wallet_data.wallet,
-                true,
-            )
-            .await
-            .unwrap_or_else(|err| {
-                error!("Failed to deploy contract: {err}");
-                process::exit(1);
-            });
-
-            // Contract for Mainnet state proofs
-            deploy_mina_bridge_example_contract(
-                &eth_rpc_url,
-                &bridge_constructor_args,
-                &wallet_data.wallet,
-                false,
+                is_state_proof_from_devnet,
             )
             .await
             .unwrap_or_else(|err| {
@@ -148,8 +140,8 @@ async fn main() {
                 process::exit(1);
             });
 
-            let initial_balance_wei =
-                parse_initial_balance(initial_balance.as_deref()).unwrap_or_else(|err| {
+            let initial_balance_wei = parse_initial_balance(initial_balance.as_deref())
+                .unwrap_or_else(|err| {
                     error!("Invalid initial balance: {err}");
                     process::exit(1);
                 });
@@ -211,7 +203,7 @@ async fn main() {
                     error!("Invalid initial balance: {err}");
                     process::exit(1);
                 });
-                
+
             info!("Deploying Nori Token Bridge...");
             info!("State Settlement Address: {}", state_settlement_addr);
             info!("Account Validation Address: {}", account_validation_addr);
