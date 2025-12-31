@@ -176,7 +176,10 @@ async fn main() {
                 process::exit(1);
             });
 
-            info!("deployed contract addresses are saved into `.generated.contract.addresses` file");
+            info!(
+                "deployed contract addresses are saved into .generated.contract.addresses.{} file",
+                filename
+            );
         }
 
         Command::DeployNoriBridge { initial_balance } => {
@@ -253,7 +256,10 @@ async fn main() {
                 process::exit(1);
             });
 
-            info!("deployed contract addresses are saved into `.generated.contract.addresses` file");
+            info!(
+                "deployed contract addresses are saved into .generated.contract.addresses.{} file",
+                filename
+            );
         }
     }
 }
