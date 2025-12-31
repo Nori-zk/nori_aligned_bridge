@@ -1,5 +1,6 @@
 use aligned_sdk::common::types::Network;
 use alloy::primitives::Address;
+use chrono::Local;
 use clap::{Parser, Subcommand};
 use log::{debug, error, info};
 use mina_bridge_core::{
@@ -17,7 +18,6 @@ use mina_bridge_core::{
 };
 use rust_decimal::{prelude::ToPrimitive, Decimal};
 use std::{fs, process, str::FromStr};
-use chrono::Local;
 
 #[derive(Parser, Debug)]
 #[command(version, about)]
@@ -177,7 +177,7 @@ async fn main() {
             });
 
             info!(
-                "deployed contract addresses are saved into .generated.contract.addresses.{} file",
+                "deployed contract addresses are saved into {} file",
                 filename
             );
         }
@@ -242,7 +242,7 @@ async fn main() {
                 error!("Failed to deploy NoriTokenBridge: {err}");
                 process::exit(1);
             });
-            
+
             // log in local filesystem
             let ts = Local::now().format("%Y%m%d%H%M%S");
             let filename = format!(".generated.contract.addresses.{}", ts);
@@ -257,7 +257,7 @@ async fn main() {
             });
 
             info!(
-                "deployed contract addresses are saved into .generated.contract.addresses.{} file",
+                "deployed contract addresses are saved into {} file",
                 filename
             );
         }
