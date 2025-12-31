@@ -109,12 +109,15 @@ async fn main() {
                     });
 
             // Contract for Devnet state proofs
-            let is_state_proof_from_devnet =match network {
+            let is_state_proof_from_devnet = match network {
                 Network::Devnet => true,
                 Network::Holesky => false,
-                            _ => return Err(
+                _ => {
+                    error!(
                 "Unrecognized chain, possible values for ETH_CHAIN are \"devnet\" and \"holesky\"."
-                    .to_owned()),
+                    .to_owned());
+                    process::exit(1);
+                }
             };
 
             let devnet_bridge_addr = deploy_mina_bridge_example_contract(
