@@ -27,17 +27,17 @@ sol!(
 pub async fn unlock_nori_token(
     rpc_url: &str,
     network: &aligned_sdk::common::types::Network,
-    state_settlement_addr: &str,
     batcher_addr: &str,
     eth_rpc_url: &str,
     proof_generator_addr: &str,
     batcher_eth_addr: &str,
     keystore_path: Option<&str>,
     private_key: Option<&str>,
+    state_settlement_addr: &str,
+    account_validation_addr: &str,
+    nori_token_bridge_eth_addr: &str,
     nori_token_storage_zkapp_addr: &str,
     nori_token_controller_token_id: &str,
-    account_validation_addr: &str,
-    nori_token_bridge_devnet_addr: &str,
     to_unlock_amount: u128,
 ) {
     let wallet_data = get_wallet(network, keystore_path, private_key).unwrap_or_else(|err| {
@@ -119,7 +119,7 @@ pub async fn unlock_nori_token(
         );
 
     let contract = NoriTokenBridge::new(
-        Address::from_str(nori_token_bridge_devnet_addr).unwrap(),
+        Address::from_str(nori_token_bridge_eth_addr).unwrap(),
         provider,
     );
 

@@ -41,7 +41,7 @@ enum Command {
         token_id: String,
         /// Amount of Nori tokens to unlock (in ether, supports decimals)
         #[arg(short, long)]
-        to_unlock_amount: f64
+        to_unlock_amount: f64,
     },
 }
 
@@ -170,7 +170,11 @@ async fn main() {
                 info!("Mina account {public_key} was validated!");
             };
         }
-        Command::UnlockNoriToken { to_unlock_amount , public_key, token_id } => {
+        Command::UnlockNoriToken {
+            to_unlock_amount,
+            public_key,
+            token_id,
+        } => {
             // Convert floating ETH amount to 18-decimal base units
             if !to_unlock_amount.is_finite() || to_unlock_amount.is_sign_negative() {
                 error!("to_unlock_amount must be a non-negative finite number");
@@ -186,17 +190,17 @@ async fn main() {
             nori::unlock_nori_token(
                 &rpc_url,
                 &network,
-                &state_settlement_addr,
                 &batcher_addr,
                 &eth_rpc_url,
                 &proof_generator_addr,
                 &batcher_eth_addr,
                 keystore_path.as_deref(),
                 private_key.as_deref(),
-                &public_key,
-                &token_id,
+                &state_settlement_addr,
                 &account_validation_addr,
                 &nori_token_bridge_eth_addr,
+                &public_key,
+                &token_id,
                 to_unlock_amount_wei,
             )
             .await;
