@@ -172,6 +172,8 @@ async fn main() {
                 error!("Failed to write .generated.contract.addresses: {err}");
                 process::exit(1);
             });
+
+            info!("deployed contract addresses are saved into `.generated.contract.addresses` file");
         }
 
         Command::DeployNoriBridge { initial_balance } => {
@@ -222,7 +224,7 @@ async fn main() {
             info!("State Settlement Address: {}", state_settlement_addr);
             info!("Account Validation Address: {}", account_validation_addr);
 
-            deploy_nori_token_bridge_contract(
+            let nori_token_bridge_addr = deploy_nori_token_bridge_contract(
                 &env_vars.eth_rpc_url,
                 state_settlement_addr,
                 account_validation_addr,
@@ -234,6 +236,19 @@ async fn main() {
                 error!("Failed to deploy NoriTokenBridge: {err}");
                 process::exit(1);
             });
+            
+            // log in local filesystem
+            let generated_addresses = format!(
+                "STATE_SETTLEMENT_ETH_ADDR={}\nACCOUNT_VALIDATION_ETH_ADDR={}\nNORI_TOKEN_BRIDGE_ETH_ADDRESS={}\n",
+                state_settlement_addr, account_validation_addr, nori_token_bridge_addr
+            );
+
+            fs::write(".generated.contract.addresses", generated_addresses).unwrap_or_else(|err| {
+                error!("Failed to write .generated.contract.addresses: {err}");
+                process::exit(1);
+            });
+
+            info!("deployed contract addresses are saved into `.generated.contract.addresses` file");
         }
     }
 }
