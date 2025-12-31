@@ -1,4 +1,4 @@
-# Mina Bridge
+# Nori Aligned Bridge
 
 Docs and utils for the Zero-knowledge state bridge from Mina to Ethereum
 
@@ -787,4 +787,5 @@ The ``final_ledger`` (epoch ledger of the k-th predecessor from the tip) is upda
 
 For a joining peer to discover the head of the current chain it MUST not only obtain the tip, but also the min(k, tip.height - 1)-th block back from the tip. For the latter the peer MUST check the block's proof of finality.  
 Peers perform the proof of finality check by verifying two zero-knowledge proofs, one for the _tip_ and one for the _root_, and a Merkle proof for the chain of protocol state hashes between them.
+
 
