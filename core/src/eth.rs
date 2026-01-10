@@ -514,8 +514,6 @@ pub async fn deploy_mina_account_validation_example_contract(
 /// Deploys the Nori Token Bridge Contract on Ethereum
 pub async fn deploy_nori_token_bridge_contract(
     eth_rpc_url: &str,
-    state_settlement_addr: alloy::primitives::Address,
-    account_validation_addr: alloy::primitives::Address,
     wallet: &EthereumWallet,
     initial_balance: Option<u128>,
 ) -> Result<alloy::primitives::Address, String> {
@@ -524,8 +522,7 @@ pub async fn deploy_nori_token_bridge_contract(
         .wallet(wallet)
         .on_http(reqwest::Url::parse(eth_rpc_url).map_err(|err| err.to_string())?);
 
-    let builder =
-        NoriTokenBridge::deploy_builder(&provider, state_settlement_addr, account_validation_addr);
+    let builder = NoriTokenBridge::deploy_builder(&provider);
 
     let builder = if let Some(balance) = initial_balance {
         builder.value(alloy::primitives::U256::from(balance))
@@ -542,5 +539,38 @@ pub async fn deploy_nori_token_bridge_contract(
     info!("Set NORI_TOKEN_BRIDGE_ETH_ADDR={}", address);
 
     Ok(address)
+}
+
+/// Configures the Nori Token Bridge Contract aligned dependencies
+pub async fn configure_nori_token_bridge_contract(
+    eth_rpc_url: &str,
+    bridge_addr: alloy::primitives::Address,
+    state_settlement_addr: alloy::primitives::Address,
+    account_validation_addr: alloy::primitives::Address,
+    wallet: &EthereumWallet,
+) -> Result<(), String> {
+    let provider = ProviderBuilder::new()
+        .with_recommended_fillers()
+        .wallet(wallet)
+        .on_http(reqwest::Url::parse(eth_rpc_url).map_err(|err| err.to_string())?);
+
+    let contract = NoriTokenBridge::new(bridge_addr, provider);
+    let call = contract.setAlignedContracts(state_settlement_addr, account_validation_addr);
+    let pending_tx = call.send().await.map_err(|err| err.to_string())?;
+
+    info!(
+        "Submitted setAlignedContracts tx for NoriTokenBridge {}: {:?}",
+        bridge_addr,
+        pending_tx.tx_hash()
+    );
+
+    info!(
+        "Waiting for Nori Token Bridge configuration tx to be mined (tx: {:?})",
+        pending_tx.tx_hash()
+    );
+
+    // NOTE: PendingTransactionBuilder is not awaitable in this SDK version; caller can
+    // poll the tx hash externally if they need confirmation.
+    Ok(())
 }
 

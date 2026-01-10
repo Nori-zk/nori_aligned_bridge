@@ -5,9 +5,10 @@ use clap::{Parser, Subcommand};
 use log::{debug, error, info};
 use mina_bridge_core::{
     eth::{
-        deploy_mina_account_validation_example_contract, deploy_mina_bridge_example_contract,
-        deploy_nori_token_bridge_contract, MinaAccountValidationExampleConstructorArgs,
-        MinaStateSettlementExampleConstructorArgs, SolStateHash,
+        configure_nori_token_bridge_contract, deploy_mina_account_validation_example_contract,
+        deploy_mina_bridge_example_contract, deploy_nori_token_bridge_contract,
+        MinaAccountValidationExampleConstructorArgs, MinaStateSettlementExampleConstructorArgs,
+        SolStateHash,
     },
     mina::query_root,
     utils::{
@@ -152,14 +153,25 @@ async fn main() {
 
             let nori_token_bridge_addr = deploy_nori_token_bridge_contract(
                 &eth_rpc_url,
-                state_settlement_addr,
-                account_validation_addr,
                 &wallet_data.wallet,
                 initial_balance_wei,
             )
             .await
             .unwrap_or_else(|err| {
                 error!("Failed to deploy NoriTokenBridge: {err}");
+                process::exit(1);
+            });
+
+            configure_nori_token_bridge_contract(
+                &eth_rpc_url,
+                nori_token_bridge_addr,
+                state_settlement_addr,
+                account_validation_addr,
+                &wallet_data.wallet,
+            )
+            .await
+            .unwrap_or_else(|err| {
+                error!("Failed to configure NoriTokenBridge: {err}");
                 process::exit(1);
             });
 
@@ -232,14 +244,25 @@ async fn main() {
 
             let nori_token_bridge_addr = deploy_nori_token_bridge_contract(
                 &env_vars.eth_rpc_url,
-                state_settlement_addr,
-                account_validation_addr,
                 &wallet_data.wallet,
                 initial_balance_wei,
             )
             .await
             .unwrap_or_else(|err| {
                 error!("Failed to deploy NoriTokenBridge: {err}");
+                process::exit(1);
+            });
+
+            configure_nori_token_bridge_contract(
+                &env_vars.eth_rpc_url,
+                nori_token_bridge_addr,
+                state_settlement_addr,
+                account_validation_addr,
+                &wallet_data.wallet,
+            )
+            .await
+            .unwrap_or_else(|err| {
+                error!("Failed to configure NoriTokenBridge: {err}");
                 process::exit(1);
             });
 
