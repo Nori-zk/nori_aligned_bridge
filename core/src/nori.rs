@@ -25,8 +25,8 @@ sol!(
 /// Unlocks Nori tokens on the bridge
 #[allow(clippy::too_many_arguments)]
 pub async fn unlock_nori_token(
-    rpc_url: &str,
-    network: &aligned_sdk::common::types::Network,
+    mina_rpc_url: &str,
+    eth_network: &aligned_sdk::common::types::Network,
     batcher_addr: &str,
     eth_rpc_url: &str,
     proof_generator_addr: &str,
@@ -40,14 +40,14 @@ pub async fn unlock_nori_token(
     nori_token_controller_token_id: &str,
     to_unlock_amount: u128,
 ) {
-    let wallet_data = get_wallet(network, keystore_path, private_key).unwrap_or_else(|err| {
+    let wallet_data = get_wallet(eth_network, keystore_path, private_key).unwrap_or_else(|err| {
         error!("{}", err);
         process::exit(1);
     });
 
     let state_verification_result = update_bridge_chain(
-        rpc_url,
-        network,
+        mina_rpc_url,
+        eth_network,
         state_settlement_addr,
         batcher_addr,
         eth_rpc_url,
@@ -92,8 +92,8 @@ pub async fn unlock_nori_token(
         nori_token_storage_zkapp_addr,
         nori_token_controller_token_id,
         &tip_state_hash,
-        rpc_url,
-        network,
+        mina_rpc_url,
+        eth_network,
         account_validation_addr,
         batcher_addr,
         eth_rpc_url,

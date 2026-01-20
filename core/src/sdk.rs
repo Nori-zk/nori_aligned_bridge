@@ -80,8 +80,8 @@ use crate::utils::wallet::WalletData;
 /// - `save_proof`: `true` if the proof with its public inputs are persisted in a file. `false` otherwise.
 #[allow(clippy::too_many_arguments)]
 pub async fn update_bridge_chain(
-    rpc_url: &str,
-    network: &Network,
+    mina_rpc_url: &str,
+    eth_network: &Network,
     state_settlement_addr: &str,
     batcher_addr: &str,
     eth_rpc_url: &str,
@@ -92,7 +92,7 @@ pub async fn update_bridge_chain(
     save_proof: bool,
 ) -> Result<(), String> {
     let (proof, pub_input) = get_mina_proof_of_state(
-        rpc_url,
+        mina_rpc_url,
         eth_rpc_url,
         state_settlement_addr,
         is_state_proof_from_devnet,
@@ -113,7 +113,7 @@ pub async fn update_bridge_chain(
     // Let's modify update_bridge_chain to take bytes.
     let verification_data = submit(
         MinaProof::State((proof, pub_input.clone())),
-        network,
+        eth_network,
         proof_generator_addr,
         batcher_addr,
         eth_rpc_url,
@@ -125,7 +125,7 @@ pub async fn update_bridge_chain(
     update_chain(
         verification_data,
         &pub_input,
-        network,
+        eth_network,
         eth_rpc_url,
         wallet_data,
         state_settlement_addr,

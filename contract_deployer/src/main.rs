@@ -12,7 +12,7 @@ use mina_bridge_core::{
     },
     mina::query_root,
     utils::{
-        constants::{ALIGNED_SM_DEVNET_ETH_ADDR, BRIDGE_TRANSITION_FRONTIER_LEN},
+        constants::{BRIDGE_TRANSITION_FRONTIER_LEN},
         env::EnvironmentVariables,
         wallet::get_wallet,
     },
@@ -53,9 +53,9 @@ async fn main() {
             debug!("Received initial balance arg: {:?}", initial_balance);
             info!("Reading env. variables");
             let EnvironmentVariables {
-                rpc_url,
+                mina_rpc_url,
                 eth_rpc_url,
-                network,
+                eth_network,
                 private_key,
                 keystore_path,
                 ..
@@ -64,7 +64,7 @@ async fn main() {
                 process::exit(1);
             });
 
-            let root_hash = query_root(&rpc_url, BRIDGE_TRANSITION_FRONTIER_LEN)
+            let root_hash = query_root(&mina_rpc_url, BRIDGE_TRANSITION_FRONTIER_LEN)
                 .await
                 .unwrap_or_else(|err| {
                     error!("Failed to query root state hash: {err}");
@@ -78,16 +78,8 @@ async fn main() {
                 process::exit(1);
             });
 
-            let aligned_sm_addr = match network {
-                Network::Devnet => Ok(ALIGNED_SM_DEVNET_ETH_ADDR.to_owned()),
-                Network::Holesky => std::env::var("ALIGNED_SERVICE_MANAGER_ADDR")
-                    .map_err(|err| format!("Error getting Aligned SM contract address: {err}")),
-                _ => Err("Unimplemented Ethereum contract on selected chain".to_owned()),
-            }
-            .unwrap_or_else(|err| {
-                error!("{err}");
-                process::exit(1);
-            });
+            let aligned_sm_addr = std::env::var("ALIGNED_SERVICE_MANAGER_ADDR")
+            .map_err(|err| format!("Error getting ALIGNED_SERVICE_MANAGER_ADDR: {err}")).unwrap();
 
             let bridge_constructor_args =
                 MinaStateSettlementExampleConstructorArgs::new(&aligned_sm_addr, root_hash)
@@ -104,19 +96,20 @@ async fn main() {
             });
 
             let wallet_data =
-                get_wallet(&network, keystore_path.as_deref(), private_key.as_deref())
+                get_wallet(&eth_network, keystore_path.as_deref(), private_key.as_deref())
                     .unwrap_or_else(|err| {
                         error!("Failed to get wallet: {err}");
                         process::exit(1);
                     });
 
             // Contract for Devnet state proofs
-            let is_state_proof_from_devnet = match network {
+            let is_state_proof_from_devnet = match eth_network {
                 Network::Devnet => true,
-                Network::Holesky => false,
+                Network::Hoodi => false,
+                Network::Sepolia => false,
                 _ => {
                     error!(
-                        "Unrecognized chain, possible values for ETH_CHAIN are \"devnet\" and \"holesky\"."
+                        "Unrecognized chain, possible values for ETH_CHAIN are \"devnet\", \"sepolia\" and \"hoodi\"."
                     );
                     process::exit(1);
                 }
@@ -203,7 +196,7 @@ async fn main() {
             });
 
             let wallet_data = get_wallet(
-                &env_vars.network,
+                &env_vars.eth_network,
                 env_vars.keystore_path.as_deref(),
                 env_vars.private_key.as_deref(),
             )

@@ -5,5 +5,4 @@ mina_state.proof
 mina_account.pub
 mina_account.proof
 aligned_verification_data
-.env
 nonce_*.bin

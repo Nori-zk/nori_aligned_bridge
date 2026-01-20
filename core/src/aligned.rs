@@ -1,6 +1,6 @@
-use std::process;
 use std::str::FromStr;
 use std::time::{Duration, Instant};
+use std::{process, string};
 
 use aligned_sdk::{
     common::types::{
@@ -12,15 +12,14 @@ use aligned_sdk::{
 
 use alloy::primitives::Address;
 use ethers::signers::Signer;
+use ethers::types::U256;
 use futures::TryFutureExt;
 use log::{error, info, warn};
 
+use crate::utils::constants::{HOODI_CHAIN_ID, SEPOLIA_CHAIN_ID};
 use crate::{
     proof::MinaProof,
-    utils::{
-        constants::{ANVIL_CHAIN_ID, HOLESKY_CHAIN_ID},
-        wallet::WalletData,
-    },
+    utils::{constants::ANVIL_CHAIN_ID, wallet::WalletData},
 };
 
 /// Submission mode for Aligned verification layer.
@@ -182,7 +181,8 @@ pub async fn submit_with_mode(
 
     let chain_id = match network {
         Network::Devnet => ANVIL_CHAIN_ID,
-        Network::Holesky => HOLESKY_CHAIN_ID,
+        Network::Sepolia => SEPOLIA_CHAIN_ID,
+        Network::Hoodi => HOODI_CHAIN_ID,
         _ => ANVIL_CHAIN_ID,
     };
 
@@ -210,9 +210,38 @@ pub async fn submit_with_mode(
         proof_generator_addr: proof_generator_addr_ethers,
     };
 
-    let max_fee = estimate_fee(eth_rpc_url, FeeEstimationType::Instant)
-        .map_err(|err| err.to_string())
-        .await?;
+    let batcher_fee_estimation_type =
+        std::env::var("BATCHER_FEE_ESTM_TYPE").unwrap_or("0".to_string());
+
+    let max_batcher_fee_env = std::env::var("BATCHER_MAX_FEE")
+        .unwrap_or_else(|_| "0".to_string())
+        .parse::<U256>()
+        .unwrap();
+    let max_fee = match batcher_fee_estimation_type.as_str() {
+        "0" => {
+            let fee = estimate_fee(eth_rpc_url, FeeEstimationType::Default)
+                .map_err(|err| err.to_string())
+                .await?;
+            fee
+        }
+        "1" => {
+            let fee = estimate_fee(eth_rpc_url, FeeEstimationType::Instant)
+                .map_err(|err| err.to_string())
+                .await?;
+            fee
+        }
+        "2" => {
+            if max_batcher_fee_env == U256::from(0) {
+                panic!("BATCHER_MAX_FEE cannot be 0 when BATCHER_FEE_ESTM_TYPE is 2(Custom)");
+            }
+            max_batcher_fee_env
+        },
+        _ => panic!(
+            "Invalid batcher fee estimation type: {}",
+            batcher_fee_estimation_type
+        ),
+    };
+
     let nonce =
         aligned_sdk::verification_layer::get_nonce_from_batcher(network.clone(), wallet.address())
             .await

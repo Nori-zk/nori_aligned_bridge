@@ -52,8 +52,8 @@ async fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
 
     let EnvironmentVariables {
-        rpc_url,
-        network,
+        mina_rpc_url,
+        eth_network,
         state_settlement_addr,
         account_validation_addr,
         batcher_addr,
@@ -63,6 +63,7 @@ async fn main() {
         keystore_path,
         private_key,
         nori_token_bridge_eth_addr,
+        ..
     } = EnvironmentVariables::new().unwrap_or_else(|err| {
         error!("{}", err);
         process::exit(1);
@@ -77,16 +78,20 @@ async fn main() {
         process::exit(1);
     });
 
-    let wallet_data = get_wallet(&network, keystore_path.as_deref(), private_key.as_deref())
-        .unwrap_or_else(|err| {
-            error!("{}", err);
-            process::exit(1);
-        });
+    let wallet_data = get_wallet(
+        &eth_network,
+        keystore_path.as_deref(),
+        private_key.as_deref(),
+    )
+    .unwrap_or_else(|err| {
+        error!("{}", err);
+        process::exit(1);
+    });
 
     match cli.command {
         Command::SubmitState { devnet, save_proof } => {
             let (proof, pub_input) = mina::get_mina_proof_of_state(
-                &rpc_url,
+                &mina_rpc_url,
                 &eth_rpc_url,
                 &state_settlement_addr,
                 devnet,
@@ -99,7 +104,7 @@ async fn main() {
 
             let verification_data = aligned::submit(
                 MinaProof::State((proof, pub_input.clone())),
-                &network,
+                &eth_network,
                 &proof_generator_addr,
                 &batcher_addr,
                 &eth_rpc_url,
@@ -115,7 +120,7 @@ async fn main() {
             eth::update_chain(
                 verification_data,
                 &pub_input,
-                &network,
+                &eth_network,
                 &eth_rpc_url,
                 wallet_data,
                 &state_settlement_addr,
@@ -134,7 +139,7 @@ async fn main() {
             state_hash,
         } => {
             let (proof, pub_input) =
-                mina::get_mina_proof_of_account(&public_key, &token_id, &state_hash, &rpc_url)
+                mina::get_mina_proof_of_account(&public_key, &token_id, &state_hash, &mina_rpc_url)
                     .await
                     .unwrap_or_else(|err| {
                         error!("{}", err);
@@ -143,7 +148,7 @@ async fn main() {
 
             let verification_data = aligned::submit(
                 MinaProof::Account((proof, pub_input.clone())),
-                &network,
+                &eth_network,
                 &proof_generator_addr,
                 &batcher_addr,
                 &eth_rpc_url,
@@ -188,8 +193,8 @@ async fn main() {
             let to_unlock_amount_wei = wei_f.round() as u128;
 
             nori::unlock_nori_token(
-                &rpc_url,
-                &network,
+                &mina_rpc_url,
+                &eth_network,
                 &batcher_addr,
                 &eth_rpc_url,
                 &proof_generator_addr,
