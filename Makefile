@@ -20,4 +20,4 @@ deploy_nori_token_bridge_contract:
 	@cargo run --manifest-path contract_deployer/Cargo.toml --release -- deploy-nori-bridge ${NORI_TOKEN_BRIDGE_INITIAL_BALANCE}
 
 unlock_nori_token:
-	@cargo run --manifest-path core/Cargo.toml --release -- unlock-nori-token $(PUBLIC_KEY) $(TOKEN_ID) $(TO_UNLOCK_AMOUNT)
+	@cargo run --manifest-path core/Cargo.toml --release -- unlock-nori-token --to-unlock-amount $(TO_UNLOCK_AMOUNT) $(PUBLIC_KEY) $(TOKEN_ID)
