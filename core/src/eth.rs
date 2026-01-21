@@ -1,4 +1,5 @@
 use aligned_sdk::common::types::{AlignedVerificationData, Network, VerificationDataCommitment};
+use alloy::hex::ToHexExt;
 use alloy::{
     network::{Ethereum, EthereumWallet},
     primitives::{Address, Bytes, FixedBytes, U256},
@@ -7,7 +8,6 @@ use alloy::{
     sol,
     transports::{http::Http, BoxTransport},
 };
-use alloy::hex::ToHexExt;
 use log::info;
 use mina_p2p_messages::v2::StateHash;
 use serde::{Deserialize, Serialize};
@@ -16,12 +16,8 @@ use serde_with::serde_as;
 use crate::{
     proof::{account_proof::MinaAccountPubInputs, state_proof::MinaStatePubInputs},
     sol::serialization::SolSerialize,
-    utils::{
-        constants::BRIDGE_TRANSITION_FRONTIER_LEN,
-        wallet::WalletData,
-    },
+    utils::{constants::BRIDGE_TRANSITION_FRONTIER_LEN, wallet::WalletData},
 };
-
 
 sol!(
     #[allow(clippy::too_many_arguments)]
@@ -105,10 +101,7 @@ impl MinaAccountValidationExampleConstructorArgs {
 
 // Main function that validates gas parameters
 // Takes provider (connection to Ethereum) and estimated_gas as parameters
-async fn validate_gas_params<P>(
-    provider: &P,
-    estimated_gas: U256,
-) -> Result<U256, String> 
+async fn validate_gas_params<P>(provider: &P, estimated_gas: U256) -> Result<U256, String>
 where
     P: Provider,
 {
@@ -169,8 +162,12 @@ pub async fn update_chain(
     contract_addr: &str,
     batcher_payment_service: &str,
 ) -> Result<(), String> {
-    let bridge_eth_addr = contract_addr.parse::<Address>().map_err(|e| e.to_string())?;
-    let batcher_payment_service_addr = batcher_payment_service.parse::<Address>().map_err(|e| e.to_string())?;
+    let bridge_eth_addr = contract_addr
+        .parse::<Address>()
+        .map_err(|e| e.to_string())?;
+    let batcher_payment_service_addr = batcher_payment_service
+        .parse::<Address>()
+        .map_err(|e| e.to_string())?;
 
     let serialized_pub_input = bincode::serialize(pub_input)
         .map_err(|err| format!("Failed to serialize public inputs: {err}"))?;
@@ -185,7 +182,7 @@ pub async fn update_chain(
         .with_recommended_fillers()
         .wallet(wallet.wallet)
         .on_provider(root);
-    
+
     let contract = MinaStateSettlementExample::new(bridge_eth_addr, provider.clone());
 
     let AlignedVerificationData {
@@ -194,7 +191,7 @@ pub async fn update_chain(
         batch_inclusion_proof,
         index_in_batch,
     } = verification_data;
-    
+
     let merkle_proof: Bytes = batch_inclusion_proof
         .merkle_path
         .into_iter()
@@ -240,11 +237,8 @@ pub async fn update_chain(
     let gas_limit = validate_gas_params(&provider, U256::from(estimated_gas)).await?;
     let update_call = update_call.gas(gas_limit.to::<u128>());
 
-    let pending_tx = update_call
-        .send()
-        .await
-        .map_err(|err| err.to_string())?;
-    
+    let pending_tx = update_call.send().await.map_err(|err| err.to_string())?;
+
     info!(
         "Transaction {} was submitted and is now pending",
         pending_tx.tx_hash().encode_hex()
@@ -255,10 +249,7 @@ pub async fn update_chain(
         .await
         .map_err(|err| err.to_string())?;
 
-    info!(
-        "Transaction mined! final gas cost: {}",
-        receipt.gas_used
-    );
+    info!("Transaction mined! final gas cost: {}", receipt.gas_used);
 
     info!("Checking that the state hashes were stored correctly..");
 
@@ -291,7 +282,9 @@ pub async fn get_bridge_tip_hash(
     contract_addr: &str,
     eth_rpc_url: &str,
 ) -> Result<SolStateHash, String> {
-    let bridge_eth_addr = contract_addr.parse::<Address>().map_err(|e| e.to_string())?;
+    let bridge_eth_addr = contract_addr
+        .parse::<Address>()
+        .map_err(|e| e.to_string())?;
 
     info!("Creating contract instance");
     let url = reqwest::Url::parse(eth_rpc_url).map_err(|e| e.to_string())?;
@@ -326,7 +319,9 @@ pub async fn get_bridge_chain_state_hashes(
     contract_addr: &str,
     eth_rpc_url: &str,
 ) -> Result<[StateHash; BRIDGE_TRANSITION_FRONTIER_LEN], String> {
-    let bridge_eth_addr = contract_addr.parse::<Address>().map_err(|e| e.to_string())?;
+    let bridge_eth_addr = contract_addr
+        .parse::<Address>()
+        .map_err(|e| e.to_string())?;
 
     info!("Creating contract instance");
     let url = reqwest::Url::parse(eth_rpc_url).map_err(|e| e.to_string())?;
@@ -341,7 +336,7 @@ pub async fn get_bridge_chain_state_hashes(
         .call()
         .await
         .map_err(|err| format!("Could not call contract for state hashes: {err}"))?;
-    
+
     let hashes = hashes_return._0;
 
     hashes
@@ -373,8 +368,12 @@ pub async fn validate_account(
     contract_addr: &str,
     batcher_payment_service: &str,
 ) -> Result<(), String> {
-    let bridge_eth_addr = contract_addr.parse::<Address>().map_err(|e| e.to_string())?;
-    let batcher_payment_service_addr = batcher_payment_service.parse::<Address>().map_err(|e| e.to_string())?;
+    let bridge_eth_addr = contract_addr
+        .parse::<Address>()
+        .map_err(|e| e.to_string())?;
+    let batcher_payment_service_addr = batcher_payment_service
+        .parse::<Address>()
+        .map_err(|e| e.to_string())?;
 
     info!("Creating contract instance");
 
@@ -434,7 +433,10 @@ pub async fn validate_account(
 
     let gas_limit = validate_gas_params(&provider, U256::from(estimated_gas)).await?;
 
-    call.gas(gas_limit.to::<u128>()).call().await.map_err(|err| err.to_string())?;
+    call.gas(gas_limit.to::<u128>())
+        .call()
+        .await
+        .map_err(|err| err.to_string())?;
 
     Ok(())
 }
@@ -475,10 +477,7 @@ pub async fn deploy_mina_bridge_example_contract(
         "Mina {} Bridge example contract successfuly deployed with address {}",
         network, address
     );
-    info!(
-        "Set STATE_SETTLEMENT_ETH_ADDR={} if using Mina {}",
-        address, network
-    );
+    info!("Set STATE_SETTLEMENT_ETH_ADDR={}", address);
 
     Ok(*address)
 }
@@ -573,4 +572,3 @@ pub async fn configure_nori_token_bridge_contract(
     // poll the tx hash externally if they need confirmation.
     Ok(())
 }
-

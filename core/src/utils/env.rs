@@ -97,8 +97,8 @@ impl EnvironmentVariables {
         let batcher_addr = std::env::var("BATCHER_ADDR").map_err(|err| {
             format!("Couldn't get BATCHER_ADDR env. variable: {err}")
         })?;
-        let batcher_eth_addr = std::env::var("BATCHER_ETH_ADDR").map_err(|err| {
-            format!("Couldn't get BATCHER_ETH_ADDR env. variable: {err}")
+        let batcher_eth_addr = std::env::var("BATCHER_PAYEMENT_SERVICE_ADDRESS").map_err(|err| {
+            format!("Couldn't get BATCHER_PAYEMENT_SERVICE_ADDRESS env. variable: {err}")
         })?;
         let eth_rpc_url = std::env::var("ETH_RPC_URL").map_err(|err| {
             format!("Couldn't get ETH_RPC_URL env. variable: {err}")
