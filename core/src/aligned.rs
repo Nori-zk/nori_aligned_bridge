@@ -281,6 +281,7 @@ pub async fn submit_with_mode(
 }
 
 /// Submits a proof using `submit_and_wait_verification` with timing logs.
+/// NOTE: Please Try Check if the previous submission was successful before submitting again.
 async fn submit_and_wait_verification_with_timing(
     eth_rpc_url: &str,
     network: &Network,
@@ -334,6 +335,7 @@ async fn submit_and_wait_verification_with_timing(
 }
 
 /// Submits a proof using `submit` followed by polling `is_proof_verified`.
+/// NOTE: Please Try to Check if the previous submission was successful before submitting again.
 async fn submit_with_polling(
     eth_rpc_url: &str,
     network: &Network,

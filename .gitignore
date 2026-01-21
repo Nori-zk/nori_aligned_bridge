@@ -6,3 +6,4 @@ mina_account.pub
 mina_account.proof
 aligned_verification_data
 nonce_*.bin
+.generated.contract.addresses.*
