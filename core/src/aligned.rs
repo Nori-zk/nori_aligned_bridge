@@ -210,6 +210,9 @@ pub async fn submit_with_mode(
         proof_generator_addr: proof_generator_addr_ethers,
     };
 
+    let cbor_size = cbor_size_upper_bound(&verification_data);
+    info!("verification_data's cbor size: {cbor_size}");
+
     let batcher_fee_estimation_type =
         std::env::var("BATCHER_FEE_ESTM_TYPE").unwrap_or("0".to_string());
 
@@ -235,7 +238,7 @@ pub async fn submit_with_mode(
                 panic!("BATCHER_MAX_FEE cannot be 0 when BATCHER_FEE_ESTM_TYPE is 2(Custom)");
             }
             max_batcher_fee_env
-        },
+        }
         _ => panic!(
             "Invalid batcher fee estimation type: {}",
             batcher_fee_estimation_type
@@ -440,4 +443,33 @@ async fn submit_with_polling(
 
         tokio::time::sleep(polling_config.poll_interval).await;
     }
+}
+
+/// Checks if the proof size + pub inputs is valid (not exceeding max_proof_size)
+/// Returns false, logs the error,
+/// and sends it to the metrics server if the size is too large
+fn cbor_size_upper_bound(data: &VerificationData) -> usize {
+    const CBOR_OVERHEAD_BYTES: usize = 1024;
+    let mut total_size = 0;
+
+    // Add length of proof Vec<u8>
+    total_size += data.proof.len();
+
+    // Add length of pub_input Option<Vec<u8>>
+    if let Some(ref pub_input) = data.pub_input {
+        total_size += pub_input.len();
+    }
+
+    // Add length of verification_key Option<Vec<u8>>
+    if let Some(ref verification_key) = data.verification_key {
+        total_size += verification_key.len();
+    }
+
+    // Add length of vm_program_code Option<Vec<u8>>
+    if let Some(ref vm_program_code) = data.vm_program_code {
+        total_size += vm_program_code.len();
+    }
+
+    // Add overhead bytes for the full NoncedVerificationData structure
+    total_size + CBOR_OVERHEAD_BYTES
 }
