@@ -8,7 +8,7 @@ use alloy::{
     sol,
     transports::{http::Http, BoxTransport},
 };
-use log::info;
+use log::{error, info};
 use mina_p2p_messages::v2::StateHash;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -250,6 +250,13 @@ pub async fn update_chain(
         .map_err(|err| err.to_string())?;
 
     info!("Transaction mined! final gas cost: {}", receipt.gas_used);
+    info!("Transaction status: {:?}", receipt.status());
+
+    // check if tx succeeds
+    if !receipt.status() {
+        error!("Transaction reverted! Check contract logs for details.");
+        return Err("Transaction reverted on chain".to_string());
+    }
 
     info!("Checking that the state hashes were stored correctly..");
 
@@ -260,6 +267,17 @@ pub async fn update_chain(
         .map_err(|err| err.to_string())?;
 
     if new_network_state_hashes != pub_input.candidate_chain_state_hashes {
+        // print the difference
+        error!("=== State Hash Mismatch Debug ===");
+        error!("Expected (candidate_chain_state_hashes):");
+        for (i, hash) in pub_input.candidate_chain_state_hashes.iter().enumerate() {
+            error!("  [{}]: {}", i, hash);
+        }
+        error!("Actual (stored in contract):");
+        for (i, hash) in new_network_state_hashes.iter().enumerate() {
+            error!("  [{}]: {}", i, hash);
+        }
+        error!("=== End Debug ===");
         return Err("Stored network state hashes don't match the candidate's".to_string());
     }
 
