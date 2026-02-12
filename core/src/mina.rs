@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use alloy_sol_types::SolValue;
+use hex;
 use base64::prelude::*;
 use futures::future::join_all;
 use graphql_client::{
@@ -13,7 +14,7 @@ use mina_p2p_messages::{
     binprot::BinProtRead,
     v2::{
         LedgerHash, MinaBaseAccountBinableArgStableV2 as MinaAccount, MinaBaseProofStableV2,
-        MinaStateProtocolStateValueStableV2, StateHash,
+        MinaBaseZkappAccountStableV2, MinaStateProtocolStateValueStableV2, StateHash,
     },
 };
 
@@ -58,6 +59,42 @@ struct AccountQuery;
 
 type TokenId = String;
 type PublicKey = String;
+
+/// 将 zkApp 账户格式化为人类可读的字符串
+fn format_zkapp_readable(zkapp: &MinaBaseZkappAccountStableV2) -> String {
+    let mut output = String::new();
+    
+    // app_state - 8 个 field elements
+    output.push_str("  app_state:\n");
+    for (i, state) in zkapp.app_state.0.0.iter().enumerate() {
+        output.push_str(&format!("    [{}]: 0x{}\n", i, hex::encode(state.as_ref())));
+    }
+    
+    // verification_key
+    output.push_str(&format!("  verification_key: {}\n", 
+        if zkapp.verification_key.is_some() { "Some(...)" } else { "None" }));
+    
+    // zkapp_version
+    output.push_str(&format!("  zkapp_version: {:?}\n", zkapp.zkapp_version));
+    
+    // action_state - 5 个 field elements
+    output.push_str("  action_state:\n");
+    for (i, state) in zkapp.action_state.iter().enumerate() {
+        output.push_str(&format!("    [{}]: 0x{}\n", i, hex::encode(state.as_ref())));
+    }
+    
+    // last_action_slot
+    output.push_str(&format!("  last_action_slot: {:?}\n", zkapp.last_action_slot));
+    
+    // proved_state
+    output.push_str(&format!("  proved_state: {}\n", zkapp.proved_state));
+    
+    // zkapp_uri
+    let uri: Result<String, _> = (&zkapp.zkapp_uri).try_into();
+    output.push_str(&format!("  zkapp_uri: {:?}\n", uri.unwrap_or_default()));
+    
+    output
+}
 
 /// Queries the Mina state from the Mina Node and returns the proof that the queried Mina state is the last finalized state
 /// of the blockchain.
@@ -332,19 +369,31 @@ async fn query_account(
         .first()
         .ok_or("Failed to retrieve membership query field".to_string())?;
 
-    let account = BASE64_STANDARD
+    // 解码 Base64 账户数据
+    let account_bytes = BASE64_STANDARD
         .decode(&membership.account)
-        .map_err(|err| format!("Failed to decode account from base64: {err}"))
-        .and_then(|binprot| {
-            MinaAccount::binprot_read(&mut binprot.as_slice())
-                .map_err(|err| format!("Failed to deserialize account binprot: {err}"))
-        })?;
+        .map_err(|err| format!("Failed to decode account from base64: {err}"))?;
 
-    info!(
-        "Queried account {} with token id {}",
-        account.public_key,
-        account.token_id //Into::<TokenIdKeyHash>::into(account.token_id.clone())
-    );
+    info!("Decoded account bytes length: {}", account_bytes.len());
+    info!("Decoded account bytes (hex): {}", hex::encode(&account_bytes));
+
+    let account = MinaAccount::binprot_read(&mut account_bytes.as_slice())
+        .map_err(|err| format!("Failed to deserialize account binprot: {err}"))?;
+
+    // 打印账户详细信息
+    info!("=== Decoded MinaAccount ===");
+    info!("Public Key: {:?}", account.public_key);
+    info!("Token ID: {:?}", account.token_id);
+    info!("Token Symbol: {:?}", account.token_symbol);
+    info!("Balance: {:?}", account.balance);
+    info!("Nonce: {:?}", account.nonce);
+    info!("Delegate: {:?}", account.delegate);
+    info!("Has zkApp: {}", account.zkapp.is_some());
+    if let Some(ref zkapp) = account.zkapp {
+        info!("=== zkApp Details (Human Readable) ===\n{}", format_zkapp_readable(zkapp));
+        info!("=== End zkApp Details ===");
+    }
+    info!("=== End of MinaAccount ===");
 
     let ledger_hash = response
         .block
