@@ -10,7 +10,7 @@ pub const SEPOLIA_CHAIN_ID: u64 = 11155111;
 
 // Bridge related constants
 /// Length of the Mina transition frontier that will or is bridged to Ethereum
-pub const BRIDGE_TRANSITION_FRONTIER_LEN: usize = 16;
+pub const BRIDGE_TRANSITION_FRONTIER_LEN: usize = 17;
 
 // Mina related constants
 // TODO(gabrielbosio): These are temporary, we will fetch the tip from the Mina contract instead of using these hardcoded values.
