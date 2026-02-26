@@ -32,8 +32,7 @@ pub struct MinaStateProof {
     pub candidate_tip_proof: MinaBaseProofStableV2,
     /// The state data of the candidate chain. Used for consensus checks and checking that the
     /// public input state hashes correspond to states that effectively form a chain.
-    pub candidate_chain_states:
-        [MinaStateProtocolStateValueStableV2; BRIDGE_TRANSITION_FRONTIER_LEN],
+    pub candidate_chain_states: Vec<MinaStateProtocolStateValueStableV2>,
     /// The latest state of the previously bridged chain, the latter also called the bridge's
     /// transition frontier. Used for consensus checks needed to be done as part of state
     /// verification to ensure that the candidate tip is better than the bridged tip.

@@ -34,6 +34,7 @@ graphql_client = { version = "0.14.0", features = [
   "reqwest",
   "reqwest-blocking",
 ] }
+mina-state-verifier = { path = "../mina_state_verifier" }
 alloy = { version = "0.3.1", features = ["full", "signer-keystore"] }
 clap = { version = "4.5.4", features = ["derive"] }
 sha3 = "0.10.8"
