@@ -105,8 +105,9 @@ async fn main() {
             // Contract for Devnet state proofs
             let is_state_proof_from_devnet = match eth_network {
                 Network::Devnet => true,
-                Network::Hoodi => false,
-                Network::Sepolia => false,
+                Network::Hoodi => true,
+                Network::Sepolia => true,
+                Network::Mainnet => false,
                 _ => {
                     error!(
                         "Unrecognized chain, possible values for ETH_CHAIN are \"devnet\", \"sepolia\" and \"hoodi\"."
