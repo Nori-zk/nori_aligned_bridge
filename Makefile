@@ -2,7 +2,7 @@ submit_mainnet_state:
 	@cargo run --manifest-path core/Cargo.toml --release -- submit-state
 
 submit_devnet_state:
-	@cargo run --manifest-path core/Cargo.toml --release -- submit-state --devnet
+	@cargo run --manifest-path core/Cargo.toml -- submit-state --devnet
 
 submit_account:
 	@cargo run --manifest-path core/Cargo.toml --release -- submit-account $(PUBLIC_KEY) $(TOKEN_ID) $(STATE_HASH)
