@@ -4,25 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-mina_bridge_core = { path = "../core/" }
-aligned-sdk = { git = "https://github.com/yetanotherco/aligned_layer.git", rev = "11d1801a86bedb375c8ccdd0d77074a7134a7427" }
-tokio = "1.39.1"
-env_logger = "0.11.5"
-bincode = "1.3.3"
-log = "0.4.22"
-alloy = { version = "0.3.1", features = ["full", "signer-keystore"] }
-clap = { version = "4.5.4", features = ["derive"] }
-rust_decimal = "1.36"
-chrono = "0.4.42"
-
-[patch.crates-io]
-ark-ff = { git = "https://github.com/lambdaclass/openmina_algebra", rev = "017531e7aaa15a2c856532b0843876e371b01122" }
-ark-ec = { git = "https://github.com/lambdaclass/openmina_algebra", rev = "017531e7aaa15a2c856532b0843876e371b01122" }
-ark-poly = { git = "https://github.com/lambdaclass/openmina_algebra", rev = "017531e7aaa15a2c856532b0843876e371b01122" }
-ark-serialize = { git = "https://github.com/lambdaclass/openmina_algebra", rev = "017531e7aaa15a2c856532b0843876e371b01122" }
-
-[patch.'https://github.com/openmina/algebra']
-ark-ff = { git = "https://github.com/lambdaclass/openmina_algebra", rev = "017531e7aaa15a2c856532b0843876e371b01122" }
-ark-ec = { git = "https://github.com/lambdaclass/openmina_algebra", rev = "017531e7aaa15a2c856532b0843876e371b01122" }
-ark-poly = { git = "https://github.com/lambdaclass/openmina_algebra", rev = "017531e7aaa15a2c856532b0843876e371b01122" }
-ark-serialize = { git = "https://github.com/lambdaclass/openmina_algebra", rev = "017531e7aaa15a2c856532b0843876e371b01122" }
+mina_bridge_core = { workspace = true }
+aligned-sdk = { workspace = true }
+tokio = { workspace = true }
+env_logger = { workspace = true }
+bincode = { workspace = true }
+log = { workspace = true }
+alloy = { workspace = true }
+clap = { workspace = true }
+rust_decimal = { workspace = true }
+chrono = { workspace = true }
