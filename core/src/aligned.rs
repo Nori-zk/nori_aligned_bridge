@@ -446,7 +446,7 @@ async fn submit_with_polling(
 }
 
 /// Checks if the proof size + pub inputs is valid (not exceeding max_proof_size)
-/// Returns false, logs the error,
+/// Returns false, logs the error, FIXME no it does not! Nor does it emit an error
 /// and sends it to the metrics server if the size is too large
 fn cbor_size_upper_bound(data: &VerificationData) -> usize {
     const CBOR_OVERHEAD_BYTES: usize = 1024;

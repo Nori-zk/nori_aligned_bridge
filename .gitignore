@@ -8,3 +8,4 @@ aligned_verification_data
 nonce_*.bin
 .generated.contract.addresses.*
 target/
+services/
