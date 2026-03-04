@@ -35,12 +35,11 @@ contract NoriTokenBridge {
     // Mina account (attestationHash) -> ETH depositor
     mapping(uint256 => address) public codeChallengeToEthAddress;
 
-    /// The NoriStorageInterface zkApp verification key hash.
-    // uint256 constant NORI_STORAGE_ZKAPP_ACCT_VERIFICATION_KEY_HASH = 0xdc9c283f73ce17466a01b90d36141b848805a3db129b6b80d581adca52c9b6f3;
+    /// NoriStorage zkApp verification key hash (keccak256(abi.encode(verificationKey))). Settable by bridge operator for upgrades.
+    bytes32 public noriStorageZkappAcctVk;
 
-    /// @notice The NoriStorageInterface zkApp tokenID.
-    uint256 constant NORI_STORAGE_ZKAPP_ACCT_TOKEN_ID =
-        0x1b848805a3db129b6b41adca52c9b6f380d58dc9c283f73ce17466a01b90d361; // TODO need change it
+    /// NoriStorage zkApp token ID (tokenIdKeyHash). Settable by bridge operator for upgrades.
+    bytes32 public noriStorageZkappTokenId;
 
     /// @notice Mina bridge contract that validates and stores Mina states.
     MinaStateSettlementExample stateSettlement;
@@ -56,8 +55,10 @@ contract NoriTokenBridge {
     // -------------------------------
     event TokensLocked(address indexed user, uint256 attestationHash, uint256 amount, uint256 when);
     event TokensUnlocked(uint256 indexed pubKeyTokenIdHash, uint256 amount, address receiver, uint256 when);
-    event StateSettlementSet(address indexed newAddress);
-    event AccountValidationSet(address indexed newAddress);
+    event StateSettlementAddrSet(address indexed newAddress);
+    event AccountValidationAddrSet(address indexed newAddress);
+    event NoriStorageZkappAcctVkSet(bytes32 indexed previousVk, bytes32 indexed newVk);
+    event NoriStorageZkappTokenIdSet(bytes32 indexed previousTokenId, bytes32 indexed newTokenId);
 
     // -------------------------------
     // Modifiers
@@ -88,8 +89,19 @@ contract NoriTokenBridge {
         stateSettlement = MinaStateSettlementExample(_stateSettlementAddr);
         accountValidation = MinaAccountValidationExample(_accountValidationAddr);
 
-        emit StateSettlementSet(_stateSettlementAddr);
-        emit AccountValidationSet(_accountValidationAddr);
+        emit StateSettlementAddrSet(_stateSettlementAddr);
+        emit AccountValidationAddrSet(_accountValidationAddr);
+    }
+
+    /// @notice Set the NoriStorage zkApp verification key hash and token ID (e.g. when upgrading the circuit).
+    function setNoriStorageZkappParams(bytes32 _noriStorageZkappAcctVk, bytes32 _noriStorageZkappTokenId) external onlyBridgeOperator {
+        bytes32 previousVk = noriStorageZkappAcctVk;
+        noriStorageZkappAcctVk = _noriStorageZkappAcctVk;
+        emit NoriStorageZkappAcctVkSet(previousVk, _noriStorageZkappAcctVk);
+
+        bytes32 previousTokenId = noriStorageZkappTokenId;
+        noriStorageZkappTokenId = _noriStorageZkappTokenId;
+        emit NoriStorageZkappTokenIdSet(previousTokenId, _noriStorageZkappTokenId);
     }
 
     function isConfigured() public view returns (bool) {
@@ -162,16 +174,15 @@ contract NoriTokenBridge {
         bytes calldata encodedAccount = pubInput[32 + 8:];
         MinaAccountValidationExample.Account memory account = abi.decode(encodedAccount, (MinaAccountValidationExample.Account));
 
-/* TODO MUST UNCOMMENT these conditions check in production
         // check that this account represents the circuit we expect
-        // uint256 verificationKeyHash = uint256(keccak256(
-        //    abi.encode(account.zkapp.verificationKey)
-        // ));
-        // require(verificationKeyHash == NORI_STORAGE_ZKAPP_ACCT_VERIFICATION_KEY_HASH, "Incorrect Zkapp Account"); // TODO Do we need check vk??
-        
+        // VerificationKey is ABI-encoded then hashed with keccak256 (Solidity has no Poseidon).
+        bytes32 verificationKeyHash = keccak256(
+           abi.encode(account.zkapp.verificationKey)
+        );
+        require(verificationKeyHash == noriStorageZkappAcctVk, "Incorrect Zkapp Account");
+
         // check if the tokenId is aligned
-        require(uint256(account.tokenIdKeyHash) == NORI_STORAGE_ZKAPP_ACCT_TOKEN_ID, "Incorrect Token Holder Account");
-*/
+        require(account.tokenIdKeyHash == noriStorageZkappTokenId, "Incorrect Token Holder Account");
 
         // check if burnedSoFar at Mina account is greater than the existing burnSoFar
         uint256 pubKeyTokenIdHash = uint256(keccak256(abi.encode(account.publicKey, account.tokenIdKeyHash)));
