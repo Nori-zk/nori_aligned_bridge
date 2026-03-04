@@ -1,5 +1,5 @@
 use aligned_sdk::common::types::Network;
-use alloy::primitives::Address;
+use alloy::primitives::{Address, FixedBytes};
 use chrono::Local;
 use clap::{Parser, Subcommand};
 use log::{debug, error, info};
@@ -7,14 +7,12 @@ use mina_bridge_core::{
     eth::{
         configure_nori_token_bridge_contract, deploy_mina_account_validation_example_contract,
         deploy_mina_bridge_example_contract, deploy_nori_token_bridge_contract,
-        MinaAccountValidationExampleConstructorArgs, MinaStateSettlementExampleConstructorArgs,
-        SolStateHash,
+        MinaAccountValidationExampleConstructorArgs,
+        MinaStateSettlementExampleConstructorArgs, SolStateHash,
     },
     mina::query_root,
     utils::{
-        constants::{BRIDGE_TRANSITION_FRONTIER_LEN},
-        env::EnvironmentVariables,
-        wallet::get_wallet,
+        constants::BRIDGE_TRANSITION_FRONTIER_LEN, env::EnvironmentVariables, wallet::get_wallet,
     },
 };
 use rust_decimal::{prelude::ToPrimitive, Decimal};
@@ -52,19 +50,12 @@ async fn main() {
         Command::DeployAllContracts { initial_balance } => {
             debug!("Received initial balance arg: {:?}", initial_balance);
             info!("Reading env. variables");
-            let EnvironmentVariables {
-                mina_rpc_url,
-                eth_rpc_url,
-                eth_network,
-                private_key,
-                keystore_path,
-                ..
-            } = EnvironmentVariables::new().unwrap_or_else(|err| {
+            let env_vars = EnvironmentVariables::new().unwrap_or_else(|err| {
                 error!("{}", err);
                 process::exit(1);
             });
 
-            let root_hash = query_root(&mina_rpc_url, BRIDGE_TRANSITION_FRONTIER_LEN)
+            let root_hash = query_root(&env_vars.mina_rpc_url, BRIDGE_TRANSITION_FRONTIER_LEN)
                 .await
                 .unwrap_or_else(|err| {
                     error!("Failed to query root state hash: {err}");
@@ -79,7 +70,8 @@ async fn main() {
             });
 
             let aligned_sm_addr = std::env::var("ALIGNED_SERVICE_MANAGER_ADDR")
-            .map_err(|err| format!("Error getting ALIGNED_SERVICE_MANAGER_ADDR: {err}")).unwrap();
+                .map_err(|err| format!("Error getting ALIGNED_SERVICE_MANAGER_ADDR: {err}"))
+                .unwrap();
 
             let bridge_constructor_args =
                 MinaStateSettlementExampleConstructorArgs::new(&aligned_sm_addr, root_hash)
@@ -95,15 +87,18 @@ async fn main() {
                 process::exit(1);
             });
 
-            let wallet_data =
-                get_wallet(&eth_network, keystore_path.as_deref(), private_key.as_deref())
-                    .unwrap_or_else(|err| {
-                        error!("Failed to get wallet: {err}");
-                        process::exit(1);
-                    });
+            let wallet_data = get_wallet(
+                &env_vars.eth_network,
+                env_vars.keystore_path.as_deref(),
+                env_vars.private_key.as_deref(),
+            )
+            .unwrap_or_else(|err| {
+                error!("Failed to get wallet: {err}");
+                process::exit(1);
+            });
 
             // Contract for Devnet state proofs
-            let is_state_proof_from_devnet = match eth_network {
+            let is_state_proof_from_devnet = match env_vars.eth_network {
                 Network::Devnet => true,
                 Network::Hoodi => true,
                 Network::Sepolia => true,
@@ -117,7 +112,7 @@ async fn main() {
             };
 
             let state_settlement_addr = deploy_mina_bridge_example_contract(
-                &eth_rpc_url,
+                &env_vars.eth_rpc_url,
                 &bridge_constructor_args,
                 &wallet_data.wallet,
                 is_state_proof_from_devnet,
@@ -129,7 +124,7 @@ async fn main() {
             });
 
             let account_validation_addr = deploy_mina_account_validation_example_contract(
-                &eth_rpc_url,
+                &env_vars.eth_rpc_url,
                 account_constructor_args,
                 &wallet_data.wallet,
             )
@@ -139,6 +134,22 @@ async fn main() {
                 process::exit(1);
             });
 
+            let nori_storage_zkapp_acct_vk =
+                parse_hex_bytes32(&env_vars.nori_storage_zkapp_acct_vk).unwrap_or_else(|e| {
+                    error!("Invalid NORI_STORAGE_ZKAPP_ACCT_VK_HASH_KECCAK256: {e}");
+                    process::exit(1);
+                });
+            let nori_storage_zkapp_token_id =
+                parse_hex_bytes32(&env_vars.nori_storage_zkapp_token_id).unwrap_or_else(|e| {
+                    error!("Invalid NORI_STORAGE_ZKAPP_TOKEN_ID: {e}");
+                    process::exit(1);
+                });
+
+            info!(
+                "Setting NoriStorage zkApp params: vk={}, tokenId={}",
+                env_vars.nori_storage_zkapp_acct_vk, env_vars.nori_storage_zkapp_token_id
+            );
+
             let initial_balance_wei = parse_initial_balance(initial_balance.as_deref())
                 .unwrap_or_else(|err| {
                     error!("Invalid initial balance: {err}");
@@ -146,7 +157,7 @@ async fn main() {
                 });
 
             let nori_token_bridge_addr = deploy_nori_token_bridge_contract(
-                &eth_rpc_url,
+                &env_vars.eth_rpc_url,
                 &wallet_data.wallet,
                 initial_balance_wei,
             )
@@ -157,10 +168,12 @@ async fn main() {
             });
 
             configure_nori_token_bridge_contract(
-                &eth_rpc_url,
+                &env_vars.eth_rpc_url,
                 nori_token_bridge_addr,
                 state_settlement_addr,
                 account_validation_addr,
+                nori_storage_zkapp_acct_vk,
+                nori_storage_zkapp_token_id,
                 &wallet_data.wallet,
             )
             .await
@@ -226,6 +239,17 @@ async fn main() {
                     process::exit(1);
                 });
 
+            let nori_storage_zkapp_acct_vk =
+                parse_hex_bytes32(&env_vars.nori_storage_zkapp_acct_vk).unwrap_or_else(|e| {
+                    error!("Invalid NORI_STORAGE_ZKAPP_ACCT_VK_HASH_KECCAK256: {e}");
+                    process::exit(1);
+                });
+            let nori_storage_zkapp_token_id =
+                parse_hex_bytes32(&env_vars.nori_storage_zkapp_token_id).unwrap_or_else(|e| {
+                    error!("Invalid NORI_STORAGE_ZKAPP_TOKEN_ID: {e}");
+                    process::exit(1);
+                });
+
             let initial_balance_wei = parse_initial_balance(initial_balance.as_deref())
                 .unwrap_or_else(|err| {
                     error!("Invalid initial balance: {err}");
@@ -235,6 +259,14 @@ async fn main() {
             info!("Deploying Nori Token Bridge...");
             info!("State Settlement Address: {}", state_settlement_addr);
             info!("Account Validation Address: {}", account_validation_addr);
+            info!(
+                "NoriStorage ZkApp Account Verification Key: {}",
+                nori_storage_zkapp_acct_vk
+            );
+            info!(
+                "NoriStorage ZkApp Token ID: {}",
+                nori_storage_zkapp_token_id
+            );
 
             let nori_token_bridge_addr = deploy_nori_token_bridge_contract(
                 &env_vars.eth_rpc_url,
@@ -252,6 +284,8 @@ async fn main() {
                 nori_token_bridge_addr,
                 state_settlement_addr,
                 account_validation_addr,
+                nori_storage_zkapp_acct_vk,
+                nori_storage_zkapp_token_id,
                 &wallet_data.wallet,
             )
             .await
@@ -281,8 +315,19 @@ async fn main() {
     }
 }
 
+fn parse_hex_bytes32(hex: &str) -> Result<FixedBytes<32>, String> {
+    let hex = hex.trim_start_matches("0x");
+    let bytes = alloy::hex::decode(hex).map_err(|e| format!("invalid hex: {e}"))?;
+    if bytes.len() != 32 {
+        return Err(format!("expected 32 bytes, got {}", bytes.len()));
+    }
+    Ok(FixedBytes::from_slice(&bytes))
+}
+
 fn parse_initial_balance(raw: Option<&str>) -> Result<Option<u128>, String> {
-    let Some(raw) = raw else { return Ok(None); };
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
     let dec = Decimal::from_str(raw).map_err(|e| format!("failed to parse decimal: {e}"))?;
     if dec.is_sign_negative() {
         return Err("initial balance must be non-negative".to_string());
