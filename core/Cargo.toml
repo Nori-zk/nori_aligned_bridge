@@ -45,6 +45,10 @@ alloy-sol-types = "0.8.2"
 alloy-contract = "0.3.1"
 zeroize = "1.8.1"
 
+[[bin]]
+name = "compute_vk_hash"
+path = "src/bin/compute_vk_hash.rs"
+
 [patch.crates-io]
 ark-ff = { git = "https://github.com/lambdaclass/openmina_algebra", rev = "017531e7aaa15a2c856532b0843876e371b01122" }
 ark-ec = { git = "https://github.com/lambdaclass/openmina_algebra", rev = "017531e7aaa15a2c856532b0843876e371b01122" }

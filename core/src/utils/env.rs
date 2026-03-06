@@ -36,6 +36,8 @@ pub struct EnvironmentVariables {
     pub keystore_path: Option<String>,
     pub private_key: Option<String>,
     pub nori_token_bridge_eth_addr: String,
+    pub nori_storage_zkapp_acct_vk: String,
+    pub nori_storage_zkapp_token_id: String,
     pub batcher_fee_estimation_type: String,
     pub batcher_max_fee: Option<String>,
 }
@@ -124,6 +126,15 @@ impl EnvironmentVariables {
                 format!("Couldn't get NORI_TOKEN_BRIDGE_ETH_ADDRESS env. variable: {err}")
             })?;
 
+        let nori_storage_zkapp_acct_vk =
+            std::env::var("NORI_STORAGE_ZKAPP_ACCT_VK_HASH_KECCAK256").map_err(|err| {
+                format!("Couldn't get NORI_STORAGE_ZKAPP_ACCT_VK_HASH_KECCAK256 env. variable: {err}")
+            })?;
+        let nori_storage_zkapp_token_id =
+            std::env::var("NORI_STORAGE_ZKAPP_TOKEN_ID").map_err(|err| {
+                format!("Couldn't get NORI_STORAGE_ZKAPP_TOKEN_ID env. variable: {err}")
+            })?;
+
         let batcher_fee_estimation_type = match std::env::var("BATCHER_FEE_ESTM_TYPE") {
             Ok(value) => value,
             Err(_) => "0".to_string(),
@@ -145,6 +156,8 @@ impl EnvironmentVariables {
             keystore_path,
             private_key,
             nori_token_bridge_eth_addr,
+            nori_storage_zkapp_acct_vk,
+            nori_storage_zkapp_token_id,
             batcher_fee_estimation_type,
             batcher_max_fee,
         })
