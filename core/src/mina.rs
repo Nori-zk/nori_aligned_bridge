@@ -328,7 +328,7 @@ pub async fn query_root(rpc_url: &str, length: usize) -> Result<StateHash, Strin
     Ok(root.state_hash.clone())
 }
 
-async fn query_account(
+pub async fn query_account(
     rpc_url: &str,
     state_hash: &str,
     public_key: &str,
@@ -338,7 +338,6 @@ async fn query_account(
         "Querying account[public_key:{public_key}, token_id:{token_id}], its merkle proof and ledger hash for state {state_hash}"
     );
     let client = reqwest::Client::new();
-
     
     let variables = account_query::Variables {
         state_hash: state_hash.to_owned(),
@@ -492,6 +491,8 @@ async fn query_candidate_chain_0(
     let first_pass_ledgers: Vec<_> = chain_states
         .iter()
         .map(|state| {
+
+            // when BRIDGE_TRANSITION_FRONTIER_LEN>16
             state
                 .body
                 .blockchain_state
@@ -499,6 +500,15 @@ async fn query_candidate_chain_0(
                 .target
                 .first_pass_ledger
                 .clone()
+
+            /* original snippet when BRIDGE_TRANSITION_FRONTIER_LEN=16
+            state
+                .body
+                .blockchain_state
+                .snarked_ledger_hash
+                .clone()
+             */
+            
         })
         .collect();
     info!("chain_ledger_hashes (first_pass_ledger in proof): {:?}", first_pass_ledgers);

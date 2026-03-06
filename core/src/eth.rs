@@ -558,12 +558,56 @@ pub async fn deploy_nori_token_bridge_contract(
     Ok(address)
 }
 
+/// Calls `setNoriStorageZkappParams` on the NoriTokenBridge contract to set
+/// the verification key hash and token ID for the NoriStorage zkApp.
+pub async fn set_nori_storage_zkapp_params(
+    eth_rpc_url: &str,
+    bridge_addr: alloy::primitives::Address,
+    nori_storage_zkapp_acct_vk: FixedBytes<32>,
+    nori_storage_zkapp_token_id: FixedBytes<32>,
+    wallet: &EthereumWallet,
+) -> Result<(), String> {
+    let provider = ProviderBuilder::new()
+        .with_recommended_fillers()
+        .wallet(wallet)
+        .on_http(reqwest::Url::parse(eth_rpc_url).map_err(|err| err.to_string())?);
+
+    let contract = NoriTokenBridge::new(bridge_addr, provider);
+    let call = contract.setNoriStorageZkappParams(nori_storage_zkapp_acct_vk, nori_storage_zkapp_token_id);
+    let pending_tx = call.send().await.map_err(|err| err.to_string())?;
+
+    info!(
+        "Submitted setNoriStorageZkappParams tx for NoriTokenBridge {}: {:?}",
+        bridge_addr,
+        pending_tx.tx_hash()
+    );
+
+    let receipt = pending_tx
+        .get_receipt()
+        .await
+        .map_err(|err| err.to_string())?;
+
+    info!(
+        "setNoriStorageZkappParams mined (gas: {}, status: {:?})",
+        receipt.gas_used,
+        receipt.status()
+    );
+
+    if !receipt.status() {
+        return Err("setNoriStorageZkappParams transaction reverted".to_string());
+    }
+
+    Ok(())
+}
+
 /// Configures the Nori Token Bridge Contract aligned dependencies
 pub async fn configure_nori_token_bridge_contract(
     eth_rpc_url: &str,
     bridge_addr: alloy::primitives::Address,
     state_settlement_addr: alloy::primitives::Address,
     account_validation_addr: alloy::primitives::Address,
+    nori_storage_zkapp_acct_vk: FixedBytes<32>,
+    nori_storage_zkapp_token_id: FixedBytes<32>,
     wallet: &EthereumWallet,
 ) -> Result<(), String> {
     let provider = ProviderBuilder::new()
@@ -585,6 +629,12 @@ pub async fn configure_nori_token_bridge_contract(
         "Waiting for Nori Token Bridge configuration tx to be mined (tx: {:?})",
         pending_tx.tx_hash()
     );
+
+    set_nori_storage_zkapp_params(eth_rpc_url, bridge_addr, nori_storage_zkapp_acct_vk, nori_storage_zkapp_token_id, wallet)
+        .await
+        .unwrap_or_else(|err| {
+            error!("Failed to set NoriStorage zkApp params: {err}");
+        });
 
     // NOTE: PendingTransactionBuilder is not awaitable in this SDK version; caller can
     // poll the tx hash externally if they need confirmation.
