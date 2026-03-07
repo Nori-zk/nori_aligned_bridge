@@ -18,7 +18,7 @@ contract MinaStateSettlementExample {
 
     /// @notice The length of the verified state chain (also called the bridge's transition
     /// frontier) to store.
-    uint256 public constant BRIDGE_TRANSITION_FRONTIER_LEN = 17;
+    uint256 public constant BRIDGE_TRANSITION_FRONTIER_LEN = 16;
 
     /// @notice The state hash of the last verified chain of Mina states (also called
     /// the bridge's transition frontier).
