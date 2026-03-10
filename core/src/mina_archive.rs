@@ -1,4 +1,7 @@
 use graphql_client::{reqwest::post_graphql, GraphQLQuery};
+use mina_curves::pasta::Fp;
+
+use crate::pubkey::{MinaCompressedPubKey, MinaPubKeyBase58};
 
 #[derive(GraphQLQuery)]
 #[graphql(
@@ -24,12 +27,12 @@ pub struct ZkAppEvent {
 /// Parsed payload of a FungibleToken Burn event.
 ///
 /// Corresponds to `BurnEvent { from: PublicKey, amount: UInt64 }` in o1js.
-/// Field order matches data[1..] of the raw event array.
+/// The raw x-coordinate and is-odd parity fields are parsed and encoded into
+/// `from` at construction time; callers receive a ready-to-use address.
 pub struct BurnEventPayload {
-    /// data[1]: PublicKey x-coordinate of the burning account.
-    pub from_x: String,
-    /// data[2]: PublicKey is-odd parity bit.
-    pub from_is_odd: String,
+    /// Base58Check-encoded Mina public key of the burning account (o1js field: `from`).
+    /// Reconstructed from data[1] (x-coordinate) and data[2] (is-odd parity).
+    pub from: MinaPubKeyBase58,
     /// data[3]: amount burned (UInt64 as decimal string).
     pub amount: String,
 }
@@ -107,12 +110,19 @@ pub async fn detect_nori_burn(
                 event.fields.len()
             ));
         }
+        let pub_x = event.fields[0]
+            .parse::<Fp>()
+            .map_err(|_| format!("Burn event at block {}: invalid x-coordinate: {}", event.block_height, event.fields[0]))?;
+        let pub_x_is_odd = match event.fields[1].as_str() {
+            "0" => false,
+            "1" => true,
+            other => return Err(format!("Burn event at block {}: invalid is_odd value: {other}", event.block_height)),
+        };
         burns.push(BurnEvent {
             block_height: event.block_height,
             state_hash: event.state_hash,
             payload: BurnEventPayload {
-                from_x: event.fields[0].clone(),
-                from_is_odd: event.fields[1].clone(),
+                from: MinaCompressedPubKey { x: pub_x, is_odd: pub_x_is_odd }.into(),
                 amount: event.fields[2].clone(),
             },
         });

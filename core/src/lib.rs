@@ -20,3 +20,5 @@ pub mod utils;
 pub mod aligned_2;
 /// Rpcs
 pub mod rpcs;
+/// Mina public key types and address encoding.
+pub mod pubkey;
