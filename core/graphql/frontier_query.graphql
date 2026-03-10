@@ -1,0 +1,10 @@
+query FrontierQuery($maxLength: Int!) {
+    bestChain(maxLength: $maxLength) {
+        stateHash
+        protocolState {
+            consensusState {
+                blockHeight
+            }
+        }
+    }
+}

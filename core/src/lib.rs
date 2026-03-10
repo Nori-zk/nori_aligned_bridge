@@ -4,6 +4,8 @@ pub mod aligned;
 pub mod eth;
 /// Interacts with a Mina node for requesting proofs and data.
 pub mod mina;
+/// Interacts with a Mina archive node for querying events.
+pub mod mina_archive;
 /// Mina Proof of State/Account definitions and (de)serialization.
 pub mod proof;
 /// High level abstractions for the bridge.
@@ -16,3 +18,5 @@ pub mod nori;
 pub mod utils;
 /// Aligned v2 (decoupled)
 pub mod aligned_2;
+/// Rpcs
+pub mod rpcs;

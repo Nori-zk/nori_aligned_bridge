@@ -1,0 +1,11 @@
+query AddressEventsQuery($address: String!, $from: Int!) {
+    events(input: { address: $address, status: ALL, from: $from }) {
+        blockInfo {
+            height
+            stateHash
+        }
+        eventData {
+            data
+        }
+    }
+}

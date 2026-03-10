@@ -28,6 +28,7 @@ use crate::{
 type StateHashAsDecimal = String;
 type PrecomputedBlockProof = String;
 type FieldElem = String;
+type Length = String;
 
 #[derive(GraphQLQuery)]
 #[graphql(
@@ -53,6 +54,14 @@ struct BestChainQuery;
 /// A query for retrieving an a Mina account state at some block, along with its ledger hash and
 /// merkle path.
 struct AccountQuery;
+
+#[derive(GraphQLQuery)]
+#[graphql(
+    schema_path = "graphql/mina_schema.json",
+    query_path = "graphql/frontier_query.graphql"
+)]
+/// A lightweight query for the state hash and block height of each block in the transition frontier.
+struct FrontierQuery;
 
 type TokenId = String;
 type PublicKey = String;
@@ -308,6 +317,46 @@ async fn query_candidate_chain(
     ))
 }
 
+pub async fn query_frontier(
+    rpc_url: &str,
+    max_length: usize,
+) -> Result<Vec<(StateHash, u32)>, String> {
+    let client = reqwest::Client::new();
+    let variables = frontier_query::Variables {
+        max_length: max_length
+            .try_into()
+            .map_err(|_| "Frontier length conversion failure".to_string())?,
+    };
+    let response = post_graphql::<FrontierQuery, _>(&client, rpc_url, variables)
+        .await
+        .map_err(|err| err.to_string())?
+        .data
+        .ok_or("Missing frontier query response data".to_string())?;
+    let best_chain = response
+        .best_chain
+        .ok_or("Missing best chain field".to_string())?;
+    if best_chain.len() != max_length {
+        return Err(format!(
+            "Expected {} blocks from frontier query, got {}",
+            max_length,
+            best_chain.len()
+        ));
+    }
+    best_chain
+        .into_iter()
+        .map(|block| {
+            let state_hash = block.state_hash;
+            let block_height: u32 = block
+                .protocol_state
+                .consensus_state
+                .block_height
+                .parse()
+                .map_err(|_| "Block height conversion failure".to_string())?;
+            Ok((state_hash, block_height))
+        })
+        .collect()
+}
+
 /// Queries the Mina node with URL `rpc_url` for the root state hash of the transition frontier.
 /// Returns the ledger hash structured so that it can be sent to the Mina State Settlement Ethereum Contract Example
 /// constructor.
@@ -428,7 +477,7 @@ async fn query_account(
     Ok((account, ledger_hash, merkle_path))
 }
 
-async fn query_candidate_chain_0(
+pub async fn query_candidate_chain_0(
     rpc_url: &str,
 ) -> Result<
     (
