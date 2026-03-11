@@ -1,0 +1,5 @@
+query CanonicalBlockQuery($height_gte: Int!, $height_lt: Int!) {
+    blocks(query: { canonical: true, blockHeight_gte: $height_gte, blockHeight_lt: $height_lt }) {
+        stateHash
+    }
+}

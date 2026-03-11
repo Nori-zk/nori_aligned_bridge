@@ -10,6 +10,13 @@ use crate::pubkey::{MinaCompressedPubKey, MinaPubKeyBase58};
 )]
 struct AddressEventsQuery;
 
+#[derive(GraphQLQuery)]
+#[graphql(
+    schema_path = "graphql/archive/schema.json",
+    query_path = "graphql/archive/canonical_block_query.graphql"
+)]
+struct CanonicalBlockQuery;
+
 /// A raw zkApp event as returned by the archive node, with block context.
 ///
 /// o1js encodes every event emitted by a multi-event contract as [event_type, ...fields],
@@ -82,6 +89,31 @@ pub async fn detect_zk_app_events(
         }
     }
     Ok(events)
+}
+
+/// Queries the state hash of the canonical block at `height` from the archive node.
+///
+/// Returns `Some(state_hash)` if a canonical block exists at that height, or `None` if the
+/// archive node returns no result (no canonical block recorded — treat as non-canonical).
+/// `canonical: true` is required in the filter: the archive stores both canonical and orphaned
+/// blocks at the same height, and the `Block` return type does not include a `canonical` field,
+/// so without the filter there is no way to identify the canonical block from the response.
+pub async fn query_canonical_block_at_height(
+    rpc_url: &str,
+    height: u32,
+) -> Result<Option<String>, String> {
+    let client = reqwest::Client::new();
+    let variables = canonical_block_query::Variables {
+        height_gte: height as i64,
+        height_lt: (height + 1) as i64,
+    };
+    let blocks = post_graphql::<CanonicalBlockQuery, _>(&client, rpc_url, variables)
+        .await
+        .map_err(|e| e.to_string())?
+        .data
+        .ok_or("Missing blocks query response data".to_string())?
+        .blocks;
+    Ok(blocks.into_iter().flatten().next().map(|b| b.state_hash))
 }
 
 /// Alphabetical index of "Burn" among the FungibleToken contract's event names:
