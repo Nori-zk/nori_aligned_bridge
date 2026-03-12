@@ -4,7 +4,9 @@ use mina_p2p_messages::v2::{
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
-use crate::{sol::serialization::SolSerialize, utils::constants::BRIDGE_TRANSITION_FRONTIER_LEN};
+use crate::utils::constants::BRIDGE_TRANSITION_FRONTIER_LEN;
+
+use crate::sol::serialization::SolSerialize;
 
 /// The public inputs of the proof that a certain Mina state is valid
 #[serde_as]

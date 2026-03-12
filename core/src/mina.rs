@@ -22,8 +22,8 @@ use crate::{
         state_proof::{MinaStateProof, MinaStatePubInputs},
     },
     sol::account::MinaAccountValidationExample,
-    utils::constants::BRIDGE_TRANSITION_FRONTIER_LEN,
 };
+use crate::utils::constants::BRIDGE_TRANSITION_FRONTIER_LEN;
 
 type StateHashAsDecimal = String;
 type PrecomputedBlockProof = String;
@@ -320,7 +320,7 @@ async fn query_candidate_chain(
 pub async fn query_frontier(
     rpc_url: &str,
     max_length: usize,
-) -> Result<Vec<(StateHash, u32)>, String> {
+) -> Result<Vec<(StateHash, u64)>, String> {
     let client = reqwest::Client::new();
     let variables = frontier_query::Variables {
         max_length: max_length
@@ -346,7 +346,7 @@ pub async fn query_frontier(
         .into_iter()
         .map(|block| {
             let state_hash = block.state_hash;
-            let block_height: u32 = block
+            let block_height: u64 = block
                 .protocol_state
                 .consensus_state
                 .block_height

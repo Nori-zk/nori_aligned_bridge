@@ -23,7 +23,7 @@ struct CanonicalBlockQuery;
 /// where event_type is the alphabetical index of the event name among all names declared
 /// in `readonly events = { ... }`.
 pub struct ZkAppEvent {
-    pub block_height: u32,
+    pub block_height: u64,
     pub state_hash: String,
     /// data[0]: alphabetical index of the event type.
     pub event_type: String,
@@ -46,7 +46,7 @@ pub struct BurnEventPayload {
 
 /// A fully parsed Burn event with block context.
 pub struct BurnEvent {
-    pub block_height: u32,
+    pub block_height: u64,
     pub state_hash: String,
     pub payload: BurnEventPayload,
 }
@@ -55,7 +55,7 @@ pub struct BurnEvent {
 pub async fn detect_zk_app_events(
     rpc_url: &str,
     contract_addr: &str,
-    from_height: u32,
+    from_height: u64,
 ) -> Result<Vec<ZkAppEvent>, String> {
     let client = reqwest::Client::new();
     let variables = address_events_query::Variables {
@@ -72,7 +72,7 @@ pub async fn detect_zk_app_events(
         let block_info = event_output
             .block_info
             .ok_or("Missing blockInfo in event output".to_string())?;
-        let block_height = block_info.height as u32;
+        let block_height = block_info.height as u64;
         let state_hash = block_info.state_hash;
         for event_data in event_output.event_data.into_iter().flatten().flatten() {
             let mut data: Vec<String> = event_data.data.into_iter().flatten().collect();
@@ -100,7 +100,7 @@ pub async fn detect_zk_app_events(
 /// so without the filter there is no way to identify the canonical block from the response.
 pub async fn query_canonical_block_at_height(
     rpc_url: &str,
-    height: u32,
+    height: u64,
 ) -> Result<Option<String>, String> {
     let client = reqwest::Client::new();
     let variables = canonical_block_query::Variables {
@@ -127,7 +127,7 @@ const BURN_EVENT_TYPE: &str = "1";
 pub async fn detect_nori_burn(
     rpc_url: &str,
     contract_addr: &str,
-    from_height: u32,
+    from_height: u64,
 ) -> Result<Vec<BurnEvent>, String> {
     let raw = detect_zk_app_events(rpc_url, contract_addr, from_height).await?;
     let mut burns = Vec::new();

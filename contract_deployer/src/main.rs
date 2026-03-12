@@ -12,11 +12,11 @@ use mina_bridge_core::{
     },
     mina::query_root,
     utils::{
-        constants::{BRIDGE_TRANSITION_FRONTIER_LEN},
         env::EnvironmentVariables,
         wallet::get_wallet,
     },
 };
+use mina_bridge_core::utils::constants::BRIDGE_TRANSITION_FRONTIER_LEN;
 use rust_decimal::{prelude::ToPrimitive, Decimal};
 use std::{fs, process, str::FromStr};
 

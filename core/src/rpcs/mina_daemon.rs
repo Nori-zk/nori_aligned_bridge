@@ -1,5 +1,6 @@
 use super::error::Error;
-use crate::{mina::{query_candidate_chain_0, query_frontier}, utils::constants::BRIDGE_TRANSITION_FRONTIER_LEN};
+use crate::mina::{query_candidate_chain_0, query_frontier};
+use crate::utils::constants::BRIDGE_TRANSITION_FRONTIER_LEN;
 use mina_p2p_messages::v2::{
     LedgerHash, MinaBaseProofStableV2, MinaStateProtocolStateValueStableV2, StateHash,
 };
@@ -52,7 +53,7 @@ impl MinaDaemonRPC {
             .map_err(Error)
     }
 
-    pub async fn query_frontier(&self, max_length: usize) -> Result<Vec<(StateHash, u32)>, Error> {
+    pub async fn query_frontier(&self, max_length: usize) -> Result<Vec<(StateHash, u64)>, Error> {
         query_frontier(self.rpc_url.as_str(), max_length)
             .await
             .map_err(Error)

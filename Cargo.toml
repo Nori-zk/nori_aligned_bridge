@@ -1,5 +1,5 @@
 [workspace]
-members = ["core", "mina_state_verifier", "contract_deployer", "services"]
+members = ["core", "mina_state_verifier", "contract_deployer"]
 resolver = "2"
 
 [workspace.dependencies]

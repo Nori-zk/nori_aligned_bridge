@@ -13,10 +13,11 @@ use mina_p2p_messages::v2::StateHash;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
+use crate::utils::constants::BRIDGE_TRANSITION_FRONTIER_LEN;
 use crate::{
     proof::{account_proof::MinaAccountPubInputs, state_proof::MinaStatePubInputs},
     sol::serialization::SolSerialize,
-    utils::{constants::BRIDGE_TRANSITION_FRONTIER_LEN, wallet::WalletData},
+    utils::wallet::WalletData,
 };
 
 sol!(
