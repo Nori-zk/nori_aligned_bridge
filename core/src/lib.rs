@@ -18,6 +18,8 @@ pub mod nori;
 pub mod utils;
 /// Aligned v2 (decoupled)
 pub mod aligned_2;
+/// Generic String Error type.
+pub mod error;
 /// Rpcs
 pub mod rpcs;
 /// Mina public key types and address encoding.

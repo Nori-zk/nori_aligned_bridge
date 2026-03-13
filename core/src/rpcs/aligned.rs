@@ -1,21 +1,20 @@
-use std::path::PathBuf;
 use std::time::Duration;
 
 use aligned_sdk::common::types::{
     AlignedVerificationData, FeeEstimationType, Network, ProvingSystemId, VerificationData, Wallet,
 };
 use alloy::primitives::Address;
-use alloy::signers::local::PrivateKeySigner;
 use ethers::core::k256::ecdsa::SigningKey;
 use ethers::signers::Signer;
 use ethers::types::{H160, U256};
 
-use super::error::Error;
+use crate::error::Error;
 use crate::aligned_2;
 use crate::proof::MinaProof;
 use crate::utils::constants::{
     ANVIL_CHAIN_ID, HOLESKY_CHAIN_ID, HOODI_CHAIN_ID, MAINNET_CHAIN_ID, SEPOLIA_CHAIN_ID,
 };
+use crate::utils::wallet::WalletData;
 
 /// Parses an `ALIGNED_NETWORK` env string into an aligned SDK `Network`.
 fn parse_aligned_network(s: &str) -> Result<Network, Error> {
@@ -47,80 +46,16 @@ fn chain_id_for_known_network(network: &Network) -> Option<u64> {
     }
 }
 
-/// Exclusive credential for signing Ethereum transactions.
-/// Validated at construction time — a `PrivateKey` variant holds parsed key bytes,
-/// a `KeystorePath` variant holds a path verified to exist on disk.
-pub enum EthSigner {
-    /// Validated private key bytes (32 bytes, parsed from hex at construction).
-    PrivateKey(Vec<u8>),
-    /// Path to a keystore file, verified to exist at construction.
-    KeystorePath(PathBuf),
-}
-
-impl EthSigner {
-    /// Reads `ETH_PRIVATE_KEY` and `ETH_KEYSTORE_PATH` from env.
-    /// Exactly one must be set. The private key is parsed immediately;
-    /// the keystore path is checked for existence.
-    fn from_env() -> Result<Self, Error> {
-        let private_key = std::env::var("ETH_PRIVATE_KEY").ok();
-        let keystore_path = std::env::var("ETH_KEYSTORE_PATH").ok();
-        match (private_key, keystore_path) {
-            (Some(_), Some(_)) => Err(Error(
-                "both ETH_PRIVATE_KEY and ETH_KEYSTORE_PATH are set; choose one".to_string(),
-            )),
-            (None, None) => Err(Error(
-                "neither ETH_PRIVATE_KEY nor ETH_KEYSTORE_PATH is set".to_string(),
-            )),
-            (Some(pk), None) => {
-                let signer: PrivateKeySigner = pk.parse().map_err(|e| {
-                    Error(format!("invalid ETH_PRIVATE_KEY: {e}"))
-                })?;
-                Ok(EthSigner::PrivateKey(signer.to_bytes().to_vec()))
-            }
-            (None, Some(ks)) => {
-                let path = PathBuf::from(&ks);
-                if !path.exists() {
-                    return Err(Error(format!(
-                        "ETH_KEYSTORE_PATH does not exist: {ks}"
-                    )));
-                }
-                Ok(EthSigner::KeystorePath(path))
-            }
-        }
-    }
-
-    /// Builds an ethers wallet from the validated credential, bound to the given chain ID.
-    fn to_wallet(&self, chain_id: u64) -> Result<Wallet<SigningKey>, Error> {
-        let key_bytes = match self {
-            EthSigner::PrivateKey(bytes) => bytes.clone(),
-            EthSigner::KeystorePath(path) => {
-                let password = rpassword::prompt_password("Enter keystore password:")
-                    .map_err(|e| Error(format!("failed to read keystore password: {e}")))?;
-                let signer =
-                    alloy::signers::local::LocalSigner::decrypt_keystore(path, password)
-                        .map_err(|e| Error(format!("failed to decrypt keystore: {e}")))?;
-                signer.to_bytes().to_vec()
-            }
-        };
-
-        Wallet::from_bytes(&key_bytes)
-            .map_err(|e| Error(format!("failed to create ethers wallet: {e}")))?
-            .with_chain_id(chain_id)
-            .try_into()
-            .map_err(|_| Error("failed to set chain_id on wallet".to_string()))
-    }
-}
-
 pub struct AlignedRPC {
     aligned_network: Network,
     aligned_proof_generator_addr: Address,
     eth_rpc_url: String,
     eth_chain_id: u64,
-    eth_signer: EthSigner,
+    wallet: WalletData,
 }
 
 impl AlignedRPC {
-    pub fn from_env() -> Result<Self, Error> {
+    pub fn from_env(wallet: WalletData) -> Result<Self, Error> {
         let aligned_network = parse_aligned_network(
             &std::env::var("ALIGNED_NETWORK")
                 .map_err(|e| Error(format!("ALIGNED_NETWORK: {e}")))?,
@@ -148,14 +83,12 @@ impl AlignedRPC {
             }
         };
 
-        let eth_signer = EthSigner::from_env()?;
-
         Ok(Self {
             aligned_network,
             aligned_proof_generator_addr,
             eth_rpc_url,
             eth_chain_id,
-            eth_signer,
+            wallet,
         })
     }
 
@@ -272,8 +205,12 @@ impl AlignedRPC {
         }
     }
 
-    /// Builds an ethers wallet from the stored signer credential.
+    /// Builds an ethers wallet from the shared WalletData key bytes, bound to this chain ID.
     fn ethers_wallet(&self) -> Result<Wallet<SigningKey>, Error> {
-        self.eth_signer.to_wallet(self.eth_chain_id)
+        Wallet::from_bytes(&self.wallet.private_key_bytes)
+            .map_err(|e| Error(format!("failed to create ethers wallet: {e}")))?
+            .with_chain_id(self.eth_chain_id)
+            .try_into()
+            .map_err(|_| Error("failed to set chain_id on wallet".to_string()))
     }
 }

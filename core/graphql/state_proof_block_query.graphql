@@ -1,0 +1,14 @@
+query StateProofBlockQuery($height: Int!) {
+    block(height: $height) {
+        stateHashField
+        stateHash
+        protocolStateProof {
+            base64
+        }
+        protocolState {
+            blockchainState {
+                snarkedLedgerHash
+            }
+        }
+    }
+}

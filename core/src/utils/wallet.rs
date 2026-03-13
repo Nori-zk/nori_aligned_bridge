@@ -4,12 +4,55 @@ use alloy::{
     signers::local::{LocalSigner, PrivateKeySigner},
 };
 use log::info;
+use std::env;
 use zeroize::Zeroizing;
+
+use crate::error::Error;
 
 #[derive(Clone)]
 pub struct WalletData {
     pub wallet: EthereumWallet,
     pub private_key_bytes: Vec<u8>,
+}
+
+impl WalletData {
+    /// Loads wallet from env. Exactly one of `KEYSTORE_PATH` or `PRIVATE_KEY` must be set.
+    pub fn from_env() -> Result<Self, Error> {
+        let keystore_path = env::var("KEYSTORE_PATH").ok();
+        let private_key = env::var("PRIVATE_KEY").ok();
+
+        match (keystore_path.as_deref(), private_key.as_deref()) {
+            (Some(_), Some(_)) => {
+                Err(Error("Both KEYSTORE_PATH and PRIVATE_KEY are set. Choose only one.".to_string()))
+            }
+            (Some(path), None) => {
+                let password = Zeroizing::new(
+                    rpassword::prompt_password("Please enter your keystore password:")
+                        .map_err(|err| Error(err.to_string()))?,
+                );
+                let signer = LocalSigner::decrypt_keystore(path, password)
+                    .map_err(|err| Error(format!("invalid KEYSTORE_PATH: {err}")))?;
+                let bytes = signer.to_bytes().to_vec();
+                Ok(WalletData {
+                    wallet: EthereumWallet::new(signer),
+                    private_key_bytes: bytes,
+                })
+            }
+            (None, Some(key)) => {
+                let signer: PrivateKeySigner = key
+                    .parse()
+                    .map_err(|_| Error("invalid PRIVATE_KEY".to_string()))?;
+                let bytes = signer.to_bytes().to_vec();
+                Ok(WalletData {
+                    wallet: EthereumWallet::new(signer),
+                    private_key_bytes: bytes,
+                })
+            }
+            (None, None) => {
+                Err(Error("Neither KEYSTORE_PATH nor PRIVATE_KEY is set.".to_string()))
+            }
+        }
+    }
 }
 
 /// Returns the `Wallet` struct defined in the `alloy` crate and the private key bytes.

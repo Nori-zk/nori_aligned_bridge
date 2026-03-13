@@ -199,7 +199,7 @@ pub async fn get_mina_proof_of_account(
     ))
 }
 
-async fn query_state(
+pub async fn query_state(
     rpc_url: &str,
     state_hash: &StateHash,
 ) -> Result<MinaStateProtocolStateValueStableV2, String> {
@@ -576,5 +576,88 @@ pub async fn query_candidate_chain_0(
         chain_state_hashes,
         chain_ledger_hashes,
         tip_state_proof,
+    ))
+}
+
+/// Queries the best chain with a caller-specified `max_length` and returns state hashes,
+/// ledger hashes, and the protocol state proof for each block. Unlike `query_candidate_chain_0`
+/// which hardcodes max_length to BRIDGE_TRANSITION_FRONTIER_LEN (16), this accepts an arbitrary
+/// max_length so the caller can request enough blocks to cover the distance from the live tip
+/// down to group_finalization_block_height plus a buffer.
+///
+/// Returns Vecs rather than fixed-size arrays because the caller will request more than 16
+/// blocks and then locate the true 16-block window by searching for the group finalization
+/// state hash in the returned set.
+///
+/// Each block yields: state hash, snarked ledger hash, and protocol state proof (base64-decoded
+/// binprot). The caller is responsible for making the subsequent query_state calls for the
+/// 16-block window it selects.
+pub async fn query_state_proof_candidate_chain(
+    rpc_url: &str,
+    max_length: usize,
+) -> Result<
+    (
+        Vec<StateHash>,
+        Vec<LedgerHash>,
+        Vec<MinaBaseProofStableV2>,
+    ),
+    String,
+> {
+    info!("Querying candidate chain for state proof construction with max_length={max_length}");
+    let client = reqwest::Client::new();
+    let variables = best_chain_query::Variables {
+        max_length: max_length
+            .try_into()
+            .map_err(|_| "max_length conversion failure".to_string())?,
+    };
+    let response = post_graphql::<BestChainQuery, _>(&client, rpc_url, variables)
+        .await
+        .map_err(|err| err.to_string())?
+        .data
+        .ok_or("Missing candidate query response data".to_string())?;
+    let best_chain = response
+        .best_chain
+        .ok_or("Missing best chain field".to_string())?;
+
+    let chain_state_hashes: Vec<StateHash> = best_chain
+        .iter()
+        .map(|block| block.state_hash.clone())
+        .collect();
+    let chain_ledger_hashes: Vec<LedgerHash> = best_chain
+        .iter()
+        .map(|block| {
+            block
+                .protocol_state
+                .blockchain_state
+                .snarked_ledger_hash
+                .clone()
+        })
+        .collect();
+    let chain_proofs: Vec<MinaBaseProofStableV2> = best_chain
+        .iter()
+        .map(|block| {
+            block
+                .protocol_state_proof
+                .base64
+                .clone()
+                .ok_or("Missing protocol state proof base64".to_string())
+                .and_then(|base64| {
+                    BASE64_URL_SAFE
+                        .decode(base64)
+                        .map_err(|err| format!("Couldn't decode state proof from base64: {err}"))
+                })
+                .and_then(|binprot| {
+                    MinaBaseProofStableV2::binprot_read(&mut binprot.as_slice())
+                        .map_err(|err| format!("Couldn't read state proof binprot: {err}"))
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
+    info!("Queried {} blocks for state proof candidate chain", chain_state_hashes.len());
+
+    Ok((
+        chain_state_hashes,
+        chain_ledger_hashes,
+        chain_proofs,
     ))
 }

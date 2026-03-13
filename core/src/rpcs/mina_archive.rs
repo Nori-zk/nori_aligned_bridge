@@ -1,4 +1,4 @@
-use super::error::Error;
+use crate::error::Error;
 use crate::mina_archive::{detect_nori_burn, query_canonical_block_at_height, BurnEvent};
 use reqwest::Url;
 use std::env;
