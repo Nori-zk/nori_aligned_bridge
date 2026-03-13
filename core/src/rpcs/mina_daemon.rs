@@ -115,7 +115,11 @@ impl MinaDaemonRPC {
             .ok_or_else(|| Error("Empty frontier response".to_string()))?;
 
         // HACK: The Mina daemon API does not support querying bestChain by height range,
-        // nor does it include the block height in the response.
+        // nor does it include the block height in the response. This is inherited from the
+        // original query_candidate_chain_0 in mina.rs which hardcodes max_length to 16 and
+        // assumes the tip IS the proof window — fine when proving the tip, broken when proving
+        // an arbitrary F_g that may be hundreds of blocks behind.
+
         // We will request group_finalization_distance_from_tip + BRIDGE_TRANSITION_FRONTIER_LEN
         // + BEST_CHAIN_QUERY_BUFFER blocks from bestChain. We request more than the 16 we need
         // because the chain can shift at any time! The tip may advance between the frontier
@@ -132,7 +136,7 @@ impl MinaDaemonRPC {
         //
         // This method gets the call down to 18 round trips: 1 frontier, 1 bestChain, and 16
         // query_state (because query_state_proof_candidate_chain does not return protocol states).
-        // Better than 32, but only just. Also stupid because the bestChain call fetches up to
+        // Better than 32, but only just. But very stupid because the bestChain call fetches up to
         // 290 blocks when the bridge is stale, and we throw away all but 16 of them.
 
         // Bail early if the total number of blocks we would need to request from the daemon
