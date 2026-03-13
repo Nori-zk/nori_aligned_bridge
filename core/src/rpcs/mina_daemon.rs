@@ -92,6 +92,19 @@ impl MinaDaemonRPC {
             .map_err(Error)
     }
 
+    // Replacement for get_mina_proof_of_state that accepts the 32 round trips
+    // (16 block(height:) + 16 query_state) to deterministically target the exact 16-block
+    // window without fetching obscenely large result sets. block(height:) is deterministic
+    // so there is no race condition and no need to overfetch up to 290 blocks from bestChain
+    // just to throw away all but 16.
+    pub async fn less_insane_get_mina_proof_of_state(
+        &self,
+        _group_finalization_block_height: u64,
+        _group_finalization_state_hash: &str,
+    ) -> Result<(MinaStateProof, MinaStatePubInputs), Error> {
+        todo!()
+    }
+
     pub async fn get_mina_proof_of_state(
         &self,
         group_finalization_block_height: u64,
@@ -119,7 +132,8 @@ impl MinaDaemonRPC {
         //
         // This method gets the call down to 18 round trips: 1 frontier, 1 bestChain, and 16
         // query_state (because query_state_proof_candidate_chain does not return protocol states).
-        // Better than 32, but only just.
+        // Better than 32, but only just. Also stupid because the bestChain call fetches up to
+        // 290 blocks when the bridge is stale, and we throw away all but 16 of them.
 
         // Bail early if the total number of blocks we would need to request from the daemon
         // (distance to F_g + the 16-block proof window + buffer) exceeds its queryable limit.
