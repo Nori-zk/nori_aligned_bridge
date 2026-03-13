@@ -17,3 +17,6 @@ pub const MINA_HASH_SIZE: usize = 32;
 // Fixed by the Pickles circuit. Block F_g is the oldest block in the proof batch, exactly
 // BRIDGE_TRANSITION_FRONTIER_LEN blocks deep from the tip.
 pub const BRIDGE_TRANSITION_FRONTIER_LEN: usize = 16;
+
+/// Maximum number of recent blocks the Mina daemon node supports querying state info for.
+pub const MINA_DAEMON_MAX_QUERYABLE_BLOCKS: usize = 290;

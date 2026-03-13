@@ -20,6 +20,8 @@ pub mod utils;
 pub mod aligned_2;
 /// Generic String Error type.
 pub mod error;
+/// Mina daemon GraphQL primitives and proof assembly for bridge workers.
+pub mod mina_daemon;
 /// Rpcs
 pub mod rpcs;
 /// Mina public key types and address encoding.

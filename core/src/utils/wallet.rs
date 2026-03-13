@@ -16,14 +16,14 @@ pub struct WalletData {
 }
 
 impl WalletData {
-    /// Loads wallet from env. Exactly one of `KEYSTORE_PATH` or `PRIVATE_KEY` must be set.
+    /// Loads wallet from env. Exactly one of `ETH_KEYSTORE_PATH` or `ETH_PRIVATE_KEY` must be set.
     pub fn from_env() -> Result<Self, Error> {
-        let keystore_path = env::var("KEYSTORE_PATH").ok();
-        let private_key = env::var("PRIVATE_KEY").ok();
+        let keystore_path = env::var("ETH_KEYSTORE_PATH").ok();
+        let private_key = env::var("ETH_PRIVATE_KEY").ok();
 
         match (keystore_path.as_deref(), private_key.as_deref()) {
             (Some(_), Some(_)) => {
-                Err(Error("Both KEYSTORE_PATH and PRIVATE_KEY are set. Choose only one.".to_string()))
+                Err(Error("Both ETH_KEYSTORE_PATH and ETH_PRIVATE_KEY are set. Choose only one.".to_string()))
             }
             (Some(path), None) => {
                 let password = Zeroizing::new(
@@ -31,7 +31,7 @@ impl WalletData {
                         .map_err(|err| Error(err.to_string()))?,
                 );
                 let signer = LocalSigner::decrypt_keystore(path, password)
-                    .map_err(|err| Error(format!("invalid KEYSTORE_PATH: {err}")))?;
+                    .map_err(|err| Error(format!("invalid ETH_KEYSTORE_PATH: {err}")))?;
                 let bytes = signer.to_bytes().to_vec();
                 Ok(WalletData {
                     wallet: EthereumWallet::new(signer),
@@ -41,7 +41,7 @@ impl WalletData {
             (None, Some(key)) => {
                 let signer: PrivateKeySigner = key
                     .parse()
-                    .map_err(|_| Error("invalid PRIVATE_KEY".to_string()))?;
+                    .map_err(|_| Error("invalid ETH_PRIVATE_KEY".to_string()))?;
                 let bytes = signer.to_bytes().to_vec();
                 Ok(WalletData {
                     wallet: EthereumWallet::new(signer),
@@ -49,7 +49,7 @@ impl WalletData {
                 })
             }
             (None, None) => {
-                Err(Error("Neither KEYSTORE_PATH nor PRIVATE_KEY is set.".to_string()))
+                Err(Error("Neither ETH_KEYSTORE_PATH nor ETH_PRIVATE_KEY is set.".to_string()))
             }
         }
     }
