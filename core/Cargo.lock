@@ -3857,6 +3857,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "mina-state-verifier"
+version = "0.1.0"
+dependencies = [
+ "ark-ec",
+ "ark-ff 0.3.0",
+ "ark-poly",
+ "ark-serialize 0.3.0",
+ "base64 0.22.1",
+ "bincode",
+ "blake2",
+ "bs58 0.5.1",
+ "hex",
+ "kimchi",
+ "lazy_static",
+ "log",
+ "mina-curves",
+ "mina-p2p-messages",
+ "mina-tree",
+ "o1-utils 0.1.0 (git+https://github.com/lambdaclass/proof-systems?rev=5bdeab3c2a43a671645952f63b9354b7a20b2326)",
+ "once_cell",
+ "poly-commitment",
+ "rmp-serde",
+ "serde",
+ "serde_json",
+ "serde_with 3.12.0",
+]
+
+[[package]]
 name = "mina-tree"
 version = "0.6.0"
 source = "git+https://github.com/lambdaclass/openmina/?rev=97df7ca5e3b631c99c9fa23a9ff8c76b4120504c#97df7ca5e3b631c99c9fa23a9ff8c76b4120504c"
@@ -3933,6 +3961,7 @@ dependencies = [
  "mina-curves",
  "mina-p2p-messages",
  "mina-signer",
+ "mina-state-verifier",
  "mina-tree",
  "num-bigint",
  "num-traits",

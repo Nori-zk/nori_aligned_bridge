@@ -1,8 +1,7 @@
 use std::str::FromStr;
 
 use aligned_sdk::common::types::{AlignedVerificationData, Network, VerificationDataCommitment};
-use ethers::{core::k256::ecdsa::SigningKey, signers::Wallet};
-use log::debug;
+use log::info;
 use mina_p2p_messages::v2::StateHash;
 
 use crate::{
@@ -63,6 +62,8 @@ pub async fn get_bridged_chain_tip_state_hash(
         .map(|hashes| hashes.last().unwrap().to_string())
 }
 
+use crate::utils::wallet::WalletData;
+
 /// Updates the Mina state bridged on Ethereum using the Mina State Settlement Example Contract.
 ///
 /// Arguments:
@@ -73,25 +74,25 @@ pub async fn get_bridged_chain_tip_state_hash(
 /// - `batcher_addr`: Address of the Aligned Batcher Service
 /// - `eth_rpc_url`: Ethereum node RPC URL to send the transaction to update the Mina state
 /// - `proof_generator_addr`: Address of the Aligned Proof Generator
-/// - `wallet`: Ethereum wallet used to sign transactions for Aligned verification and Mina state update
+/// - `wallet_data`: Wallet data containing the Ethereum wallet and private key bytes
 /// - `batcher_payment_service`: Address of the Aligned Batcher Payment Service
 /// - `is_state_proof_from_devnet`: `true` if the Mina state to fetch is from Mina Devnet. `false` if it is from Mainnet.
 /// - `save_proof`: `true` if the proof with its public inputs are persisted in a file. `false` otherwise.
 #[allow(clippy::too_many_arguments)]
 pub async fn update_bridge_chain(
-    rpc_url: &str,
-    network: &Network,
+    mina_rpc_url: &str,
+    eth_network: &Network,
     state_settlement_addr: &str,
     batcher_addr: &str,
     eth_rpc_url: &str,
     proof_generator_addr: &str,
-    wallet: Wallet<SigningKey>,
+    wallet_data: WalletData,
     batcher_payment_service: &str,
     is_state_proof_from_devnet: bool,
     save_proof: bool,
 ) -> Result<(), String> {
     let (proof, pub_input) = get_mina_proof_of_state(
-        rpc_url,
+        mina_rpc_url,
         eth_rpc_url,
         state_settlement_addr,
         is_state_proof_from_devnet,
@@ -101,17 +102,22 @@ pub async fn update_bridge_chain(
     if pub_input.candidate_chain_state_hashes
         == get_bridge_chain_state_hashes(state_settlement_addr, eth_rpc_url).await?
     {
-        debug!("The bridge chain is updated to the candidate chain");
+        info!("The bridge chain is updated to the candidate chain");
         return Err("Latest chain is already verified".to_string());
     }
 
+    // We don't expose signer from EthereumWallet easily to get bytes, so we pass bytes separately or assume we can't easily get them.
+    // Wait, I updated get_wallet to return bytes, but here I am trying to get it from wallet?
+    // I should update update_bridge_chain signature to take bytes as well or just bytes if wallet is recreated.
+    // But eth::update_chain takes wallet.
+    // Let's modify update_bridge_chain to take bytes.
     let verification_data = submit(
         MinaProof::State((proof, pub_input.clone())),
-        network,
+        eth_network,
         proof_generator_addr,
         batcher_addr,
         eth_rpc_url,
-        wallet.clone(),
+        wallet_data.clone(),
         save_proof,
     )
     .await?;
@@ -119,9 +125,9 @@ pub async fn update_bridge_chain(
     update_chain(
         verification_data,
         &pub_input,
-        network,
+        eth_network,
         eth_rpc_url,
-        wallet,
+        wallet_data,
         state_settlement_addr,
         batcher_payment_service,
     )
@@ -144,11 +150,12 @@ pub async fn update_bridge_chain(
 /// - `eth_rpc_url`: Ethereum node RPC URL to send the transaction to update the Mina state
 /// - `proof_generator_addr`: Address of the Aligned Proof Generator
 /// - `batcher_payment_service`: Address of the Aligned Batcher Payment Service
-/// - `wallet`: Ethereum wallet used to sign transactions for Aligned verification and Mina state update
+/// - `wallet_data`: Wallet data containing the Ethereum wallet and private key bytes
 /// - `save_proof`: `true` if the proof with its public inputs are persisted in a file. `false` otherwise.
 #[allow(clippy::too_many_arguments)]
 pub async fn validate_account(
     public_key: &str,
+    token_id: &str,
     state_hash: &str,
     rpc_url: &str,
     network: &Network,
@@ -157,10 +164,10 @@ pub async fn validate_account(
     eth_rpc_url: &str,
     proof_generator_addr: &str,
     batcher_payment_service: &str,
-    wallet: Wallet<SigningKey>,
+    wallet_data: WalletData,
     save_proof: bool,
 ) -> Result<AccountVerificationData, String> {
-    let (proof, pub_input) = get_mina_proof_of_account(public_key, state_hash, rpc_url).await?;
+    let (proof, pub_input) = get_mina_proof_of_account(public_key, token_id, state_hash, rpc_url).await?;
 
     let verification_data = submit(
         MinaProof::Account((proof, pub_input.clone())),
@@ -168,7 +175,7 @@ pub async fn validate_account(
         proof_generator_addr,
         batcher_addr,
         eth_rpc_url,
-        wallet.clone(),
+        wallet_data,
         save_proof,
     )
     .await?;

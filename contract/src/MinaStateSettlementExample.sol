@@ -60,10 +60,8 @@ contract MinaStateSettlementExample {
 
     /// @notice Returns true if this snarked ledger hash was bridged.
     function isLedgerVerified(bytes32 ledgerHash) external view returns (bool) {
-        for (uint256 i = 0; i < BRIDGE_TRANSITION_FRONTIER_LEN; i++) {
-            if (chainLedgerHashes[BRIDGE_TRANSITION_FRONTIER_LEN - 1 - i] == ledgerHash) {
-                return true;
-            }
+        if (chainLedgerHashes[0] == ledgerHash) {
+            return true;
         }
         return false;
     }
