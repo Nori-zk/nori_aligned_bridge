@@ -8,8 +8,12 @@
 use std::time::Duration;
 
 use aligned_sdk::common::types::{AlignedVerificationData, Network, VerificationData, Wallet};
-
+use alloy::primitives::{Address, FixedBytes};
 use log::{error, info};
+use reqwest::Url;
+
+use crate::eth_2;
+use crate::rpcs::errors::{classify_submit_error, classify_verification_error, AlignedError};
 
 /// Standard batcher max proof size (4 MiB), matches public batcher deployments.
 const MAX_PROOF_SIZE: usize = 4 * 1024 * 1024;
@@ -19,7 +23,7 @@ const CBOR_OVERHEAD_BYTES: usize = 1024;
 
 /// Returns an upper-bound estimate of the CBOR-encoded size of `data`.
 /// Returns `Err` if the estimate exceeds `MAX_PROOF_SIZE`.
-fn validate_cbor_size(data: &VerificationData) -> Result<usize, String> {
+fn validate_cbor_size(data: &VerificationData) -> Result<usize, AlignedError> {
     let mut size = data.proof.len();
     if let Some(ref v) = data.pub_input {
         size += v.len();
@@ -33,10 +37,10 @@ fn validate_cbor_size(data: &VerificationData) -> Result<usize, String> {
     size += CBOR_OVERHEAD_BYTES;
 
     if size > MAX_PROOF_SIZE {
-        return Err(format!(
-            "Proof payload too large: estimated {} bytes exceeds max {} bytes",
+        return Err(AlignedError::PayloadTooLarge(format!(
+            "estimated {} bytes exceeds max {} bytes",
             size, MAX_PROOF_SIZE
-        ));
+        )));
     }
 
     Ok(size)
@@ -53,7 +57,7 @@ pub async fn submit(
     wallet: Wallet<ethers::core::k256::ecdsa::SigningKey>,
     nonce: ethers::types::U256,
     proof_name: &str,
-) -> Result<AlignedVerificationData, String> {
+) -> Result<AlignedVerificationData, AlignedError> {
     let cbor_size = validate_cbor_size(verification_data)?;
     info!("Submitting {} into Aligned (cbor ~{} bytes)...", proof_name, cbor_size);
 
@@ -65,7 +69,7 @@ pub async fn submit(
         nonce,
     )
     .await
-    .map_err(|e| e.to_string());
+    .map_err(classify_submit_error);
 
     match &result {
         Ok(data) => info!(
@@ -81,12 +85,17 @@ pub async fn submit(
 /// Single-shot check of whether a proof is verified on-chain. Decoupled from submission —
 /// the caller drives when and how often this is called. Returns Ok(true) if verified,
 /// Ok(false) if not yet, Err on timeout or RPC failure.
-pub async fn check_verification(
+///
+/// Returns a bare bool which is ambiguous: `false` can mean "not yet" or "definitively
+/// not verified". Use `check_verification` instead, which reads `batchesState.responded`
+/// to disambiguate.
+#[deprecated(note = "use check_verification which disambiguates pending vs failed via batchesState.responded")]
+pub async fn check_verification_old(
     eth_rpc_url: &str,
     network: &Network,
     aligned_verification_data: &AlignedVerificationData,
     timeout: Duration,
-) -> Result<bool, String> {
+) -> Result<bool, AlignedError> {
     tokio::time::timeout(
         timeout,
         aligned_sdk::verification_layer::is_proof_verified(
@@ -96,6 +105,78 @@ pub async fn check_verification(
         ),
     )
     .await
-    .map_err(|_| "is_proof_verified timed out".to_string())?
-    .map_err(|e| e.to_string())
+    .map_err(|_| AlignedError::RpcUnreachable("is_proof_verified timed out".into()))?
+    .map_err(classify_verification_error)
+}
+
+/// Result of checking whether an Aligned batch proof has been verified on-chain.
+///
+/// The Aligned SDK's `is_proof_verified` returns a bare `bool`, collapsing three distinct
+/// situations into a single `false`. This enum disambiguates them by combining the SDK call
+/// with a direct read of `batchesState(batchIdentifier).responded` on the
+/// AlignedLayerServiceManager contract.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BatchVerificationStatus {
+    /// `verifyBatchInclusion` returned `true`. The proof is verified on-chain.
+    Verified,
+    /// The Aligned aggregator has not yet responded to this batch. The proof may still
+    /// be verified in the future. Keep polling.
+    Pending,
+    /// The Aligned aggregator responded but `verifyBatchInclusion` returned `false`.
+    /// The merkle inclusion proof failed. This is a definitive, non-recoverable failure.
+    Failed,
+}
+
+/// Single-shot check of whether a proof is verified on-chain, with deterministic
+/// disambiguation of "pending" vs "definitively failed".
+///
+/// 1. Calls `verifyBatchInclusion` via the SDK's `is_proof_verified`.
+///    - `Ok(true)` -> `Verified`
+///    - `Err(...)` -> propagated as `AlignedError`
+///    - `Ok(false)` -> ambiguous, proceed to step 2
+/// 2. Reads `batchesState(batchIdentifier).responded` from the AlignedLayerServiceManager.
+///    - `responded == false` -> `Pending` (aggregator hasn't responded yet)
+///    - `responded == true` -> `Failed` (aggregator responded, merkle proof failed)
+pub async fn check_verification(
+    eth_rpc_url: &Url,
+    aligned_service_manager_addr: Address,
+    network: &Network,
+    aligned_verification_data: &AlignedVerificationData,
+    timeout: Duration,
+) -> Result<BatchVerificationStatus, AlignedError> {
+    #[allow(deprecated)]
+    let verified = check_verification_old(
+        eth_rpc_url.as_str(),
+        network,
+        aligned_verification_data,
+        timeout,
+    )
+    .await?;
+
+    if verified {
+        return Ok(BatchVerificationStatus::Verified);
+    }
+
+    // verifyBatchInclusion returned false — disambiguate by reading batchesState.
+    let batch_merkle_root = FixedBytes::<32>::from(
+        aligned_verification_data.batch_merkle_root,
+    );
+    let proof_generator_addr = FixedBytes::<20>::from(
+        aligned_verification_data.verification_data_commitment.proof_generator_addr,
+    );
+
+    let responded = eth_2::is_batch_responded(
+        eth_rpc_url,
+        aligned_service_manager_addr,
+        batch_merkle_root,
+        proof_generator_addr,
+    )
+    .await
+    .map_err(AlignedError::BatcherContractCallFailed)?;
+
+    if responded {
+        Ok(BatchVerificationStatus::Failed)
+    } else {
+        Ok(BatchVerificationStatus::Pending)
+    }
 }

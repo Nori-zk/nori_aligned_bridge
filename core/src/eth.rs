@@ -1,12 +1,10 @@
 use aligned_sdk::common::types::{AlignedVerificationData, Network, VerificationDataCommitment};
 use alloy::hex::ToHexExt;
 use alloy::{
-    network::{Ethereum, EthereumWallet},
+    network::EthereumWallet,
     primitives::{Address, Bytes, FixedBytes, U256},
-    providers::{Provider, ProviderBuilder, RootProvider},
-    rpc::client::RpcClient,
+    providers::{Provider, ProviderBuilder},
     sol,
-    transports::{http::Http, BoxTransport},
 };
 use log::{error, info};
 use mina_p2p_messages::v2::StateHash;
@@ -175,14 +173,9 @@ pub async fn update_chain(
 
     info!("Creating contract instance");
     let url = reqwest::Url::parse(eth_rpc_url).map_err(|e| e.to_string())?;
-    let http = Http::new(url);
-    let boxed = BoxTransport::new(http);
-    let client = RpcClient::new(boxed, true);
-    let root = RootProvider::new(client);
     let provider = ProviderBuilder::new()
-        .with_recommended_fillers()
         .wallet(wallet.wallet)
-        .on_provider(root);
+        .connect_http(url);
 
     let contract = MinaStateSettlementExample::new(bridge_eth_addr, provider.clone());
 
@@ -236,7 +229,7 @@ pub async fn update_chain(
 
     // Validate gas parameters and get safe gas limit
     let gas_limit = validate_gas_params(&provider, U256::from(estimated_gas)).await?;
-    let update_call = update_call.gas(gas_limit.to::<u128>());
+    let update_call = update_call.gas(gas_limit.to::<u64>());
 
     let pending_tx = update_call.send().await.map_err(|err| err.to_string())?;
 
@@ -307,19 +300,14 @@ pub async fn get_bridge_tip_hash(
 
     info!("Creating contract instance");
     let url = reqwest::Url::parse(eth_rpc_url).map_err(|e| e.to_string())?;
-    let http = Http::new(url);
-    let boxed = BoxTransport::new(http);
-    let client = RpcClient::new(boxed, true);
-    let provider: RootProvider<_, Ethereum> = RootProvider::new(client);
+    let provider = ProviderBuilder::new().connect_http(url);
     let contract = MinaStateSettlementExample::new(bridge_eth_addr, provider);
 
-    let state_hash_return = contract
+    let state_hash_bytes = contract
         .getTipStateHash()
         .call()
         .await
         .map_err(|err| err.to_string())?;
-
-    let state_hash_bytes = state_hash_return._0;
 
     let state_hash: SolStateHash = bincode::deserialize(state_hash_bytes.as_slice())
         .map_err(|err| format!("Failed to deserialize bridge tip state hash: {err}"))?;
@@ -344,23 +332,18 @@ pub async fn get_bridge_chain_state_hashes(
 
     info!("Creating contract instance");
     let url = reqwest::Url::parse(eth_rpc_url).map_err(|e| e.to_string())?;
-    let http = Http::new(url);
-    let boxed = BoxTransport::new(http);
-    let client = RpcClient::new(boxed, true);
-    let provider: RootProvider<_, Ethereum> = RootProvider::new(client);
+    let provider = ProviderBuilder::new().connect_http(url);
     let contract = MinaStateSettlementExample::new(bridge_eth_addr, provider);
 
-    let hashes_return = contract
+    let hashes = contract
         .getChainStateHashes()
         .call()
         .await
         .map_err(|err| format!("Could not call contract for state hashes: {err}"))?;
 
-    let hashes = hashes_return._0;
-
     hashes
         .into_iter()
-        .map(|hash| {
+        .map(|hash: FixedBytes<32>| {
             bincode::deserialize::<SolStateHash>(hash.as_slice())
                 .map_err(|err| format!("Failed to deserialize network state hashes: {err}"))
                 .map(|hash| hash.0)
@@ -397,10 +380,7 @@ pub async fn validate_account(
     info!("Creating contract instance");
 
     let url = reqwest::Url::parse(eth_rpc_url).map_err(|e| e.to_string())?;
-    let http = Http::new(url);
-    let boxed = BoxTransport::new(http);
-    let client = RpcClient::new(boxed, true);
-    let provider: RootProvider<_, Ethereum> = RootProvider::new(client);
+    let provider = ProviderBuilder::new().connect_http(url);
     let contract = MinaAccountValidationExample::new(bridge_eth_addr, provider.clone());
 
     let serialized_pub_input = bincode::serialize(pub_input)
@@ -452,7 +432,7 @@ pub async fn validate_account(
 
     let gas_limit = validate_gas_params(&provider, U256::from(estimated_gas)).await?;
 
-    call.gas(gas_limit.to::<u128>())
+    call.gas(gas_limit.to::<u64>())
         .call()
         .await
         .map_err(|err| err.to_string())?;
@@ -468,9 +448,9 @@ pub async fn deploy_mina_bridge_example_contract(
     is_state_proof_from_devnet: bool,
 ) -> Result<alloy::primitives::Address, String> {
     let provider = ProviderBuilder::new()
-        .with_recommended_fillers()
+
         .wallet(wallet)
-        .on_http(reqwest::Url::parse(eth_rpc_url).map_err(|err| err.to_string())?);
+        .connect_http(reqwest::Url::parse(eth_rpc_url).map_err(|err| err.to_string())?);
 
     let MinaStateSettlementExampleConstructorArgs {
         aligned_service_addr,
@@ -508,9 +488,9 @@ pub async fn deploy_mina_account_validation_example_contract(
     wallet: &EthereumWallet,
 ) -> Result<alloy::primitives::Address, String> {
     let provider = ProviderBuilder::new()
-        .with_recommended_fillers()
+
         .wallet(wallet)
-        .on_http(reqwest::Url::parse(eth_rpc_url).map_err(|err| err.to_string())?);
+        .connect_http(reqwest::Url::parse(eth_rpc_url).map_err(|err| err.to_string())?);
 
     let MinaAccountValidationExampleConstructorArgs {
         aligned_service_addr,
@@ -536,9 +516,9 @@ pub async fn deploy_nori_token_bridge_contract(
     initial_balance: Option<u128>,
 ) -> Result<alloy::primitives::Address, String> {
     let provider = ProviderBuilder::new()
-        .with_recommended_fillers()
+
         .wallet(wallet)
-        .on_http(reqwest::Url::parse(eth_rpc_url).map_err(|err| err.to_string())?);
+        .connect_http(reqwest::Url::parse(eth_rpc_url).map_err(|err| err.to_string())?);
 
     let builder = NoriTokenBridge::deploy_builder(&provider);
 
@@ -568,9 +548,9 @@ pub async fn configure_nori_token_bridge_contract(
     wallet: &EthereumWallet,
 ) -> Result<(), String> {
     let provider = ProviderBuilder::new()
-        .with_recommended_fillers()
+
         .wallet(wallet)
-        .on_http(reqwest::Url::parse(eth_rpc_url).map_err(|err| err.to_string())?);
+        .connect_http(reqwest::Url::parse(eth_rpc_url).map_err(|err| err.to_string())?);
 
     let contract = NoriTokenBridge::new(bridge_addr, provider);
     let call = contract.setAlignedContracts(state_settlement_addr, account_validation_addr);

@@ -2,6 +2,7 @@ use graphql_client::{reqwest::post_graphql, GraphQLQuery};
 use mina_curves::pasta::Fp;
 
 use crate::pubkey::{MinaCompressedPubKey, MinaPubKeyBase58};
+use crate::rpcs::errors::MinaArchiveError;
 
 #[derive(GraphQLQuery)]
 #[graphql(
@@ -56,22 +57,25 @@ pub async fn detect_zk_app_events(
     rpc_url: &str,
     contract_addr: &str,
     from_height: u64,
-) -> Result<Vec<ZkAppEvent>, String> {
+) -> Result<Vec<ZkAppEvent>, MinaArchiveError> {
     let client = reqwest::Client::new();
     let variables = address_events_query::Variables {
         address: contract_addr.to_owned(),
         from: from_height as i64,
     };
-    let response = post_graphql::<AddressEventsQuery, _>(&client, rpc_url, variables)
-        .await
-        .map_err(|e| e.to_string())?
-        .data
-        .ok_or("Missing events query response data".to_string())?;
+    let response = post_graphql::<AddressEventsQuery, _>(&client, rpc_url, variables).await?;
+    if let Some(errors) = response.errors {
+        if !errors.is_empty() {
+            let msgs: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
+            return Err(MinaArchiveError::GraphQLError(msgs.join("; ")));
+        }
+    }
+    let data = response.data.ok_or_else(|| MinaArchiveError::MalformedResponse("missing response data".into()))?;
     let mut events = Vec::new();
-    for event_output in response.events.into_iter().flatten() {
+    for event_output in data.events.into_iter().flatten() {
         let block_info = event_output
             .block_info
-            .ok_or("Missing blockInfo in event output".to_string())?;
+            .ok_or_else(|| MinaArchiveError::MalformedResponse("Missing blockInfo in event output".into()))?;
         let block_height = block_info.height as u64;
         let state_hash = block_info.state_hash;
         for event_data in event_output.event_data.into_iter().flatten().flatten() {
@@ -101,17 +105,22 @@ pub async fn detect_zk_app_events(
 pub async fn query_canonical_block_at_height(
     rpc_url: &str,
     height: u64,
-) -> Result<Option<String>, String> {
+) -> Result<Option<String>, MinaArchiveError> {
     let client = reqwest::Client::new();
     let variables = canonical_block_query::Variables {
         height_gte: height as i64,
         height_lt: (height + 1) as i64,
     };
-    let blocks = post_graphql::<CanonicalBlockQuery, _>(&client, rpc_url, variables)
-        .await
-        .map_err(|e| e.to_string())?
+    let response = post_graphql::<CanonicalBlockQuery, _>(&client, rpc_url, variables).await?;
+    if let Some(errors) = response.errors {
+        if !errors.is_empty() {
+            let msgs: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
+            return Err(MinaArchiveError::GraphQLError(msgs.join("; ")));
+        }
+    }
+    let blocks = response
         .data
-        .ok_or("Missing blocks query response data".to_string())?
+        .ok_or_else(|| MinaArchiveError::MalformedResponse("missing response data".into()))?
         .blocks;
     Ok(blocks.into_iter().flatten().next().map(|b| b.state_hash))
 }
@@ -128,7 +137,7 @@ pub async fn detect_nori_burn(
     rpc_url: &str,
     contract_addr: &str,
     from_height: u64,
-) -> Result<Vec<BurnEvent>, String> {
+) -> Result<Vec<BurnEvent>, MinaArchiveError> {
     let raw = detect_zk_app_events(rpc_url, contract_addr, from_height).await?;
     let mut burns = Vec::new();
     for event in raw {
@@ -136,19 +145,19 @@ pub async fn detect_nori_burn(
             continue;
         }
         if event.fields.len() < 3 {
-            return Err(format!(
+            return Err(MinaArchiveError::MalformedResponse(format!(
                 "Burn event at block {} has {} payload fields, expected 3",
                 event.block_height,
                 event.fields.len()
-            ));
+            )));
         }
         let pub_x = event.fields[0]
             .parse::<Fp>()
-            .map_err(|_| format!("Burn event at block {}: invalid x-coordinate: {}", event.block_height, event.fields[0]))?;
+            .map_err(|_| MinaArchiveError::MalformedResponse(format!("Burn event at block {}: invalid x-coordinate: {}", event.block_height, event.fields[0])))?;
         let pub_x_is_odd = match event.fields[1].as_str() {
             "0" => false,
             "1" => true,
-            other => return Err(format!("Burn event at block {}: invalid is_odd value: {other}", event.block_height)),
+            other => return Err(MinaArchiveError::MalformedResponse(format!("Burn event at block {}: invalid is_odd value: {other}", event.block_height))),
         };
         burns.push(BurnEvent {
             block_height: event.block_height,

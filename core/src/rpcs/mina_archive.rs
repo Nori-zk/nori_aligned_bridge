@@ -2,6 +2,7 @@ use crate::error::Error;
 use crate::mina_archive::{detect_nori_burn, query_canonical_block_at_height, BurnEvent};
 use reqwest::Url;
 use std::env;
+use super::errors::MinaArchiveError;
 
 pub struct MinaArchiveRPC {
     rpc_url: Url,
@@ -21,10 +22,9 @@ impl MinaArchiveRPC {
         &self,
         contract_addr: &str,
         from_height: u64,
-    ) -> Result<Vec<BurnEvent>, Error> {
+    ) -> Result<Vec<BurnEvent>, MinaArchiveError> {
         detect_nori_burn(self.rpc_url.as_str(), contract_addr, from_height)
             .await
-            .map_err(Error)
     }
 
     /// Returns the state hash of the canonical block at `height`, or `None` if the archive
@@ -32,9 +32,8 @@ impl MinaArchiveRPC {
     pub async fn query_canonical_block_at_height(
         &self,
         height: u64,
-    ) -> Result<Option<String>, Error> {
+    ) -> Result<Option<String>, MinaArchiveError> {
         query_canonical_block_at_height(self.rpc_url.as_str(), height)
             .await
-            .map_err(Error)
     }
 }

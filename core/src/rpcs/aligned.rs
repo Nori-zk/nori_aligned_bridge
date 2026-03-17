@@ -8,9 +8,10 @@ use ethers::core::k256::ecdsa::SigningKey;
 use ethers::signers::Signer;
 use ethers::types::{H160, U256};
 
+use crate::aligned_2::{self, BatchVerificationStatus};
 use crate::error::Error;
-use crate::aligned_2;
 use crate::proof::MinaProof;
+use crate::rpcs::errors::AlignedError;
 use crate::utils::constants::{
     ANVIL_CHAIN_ID, HOLESKY_CHAIN_ID, HOODI_CHAIN_ID, MAINNET_CHAIN_ID, SEPOLIA_CHAIN_ID,
 };
@@ -49,6 +50,7 @@ fn chain_id_for_known_network(network: &Network) -> Option<u64> {
 pub struct AlignedRPC {
     aligned_network: Network,
     aligned_proof_generator_addr: Address,
+    aligned_eth_service_manager_addr: Address,
     eth_rpc_url: String,
     eth_chain_id: u64,
     wallet: WalletData,
@@ -66,6 +68,12 @@ impl AlignedRPC {
             .trim()
             .parse::<Address>()
             .map_err(|e| Error(format!("invalid ALIGNED_PROOF_GENERATOR_ADDR: {e}")))?;
+
+        let aligned_eth_service_manager_addr = std::env::var("ALIGNED_ETH_SERVICE_MANAGER_ADDRESS")
+            .map_err(|e| Error(format!("ALIGNED_ETH_SERVICE_MANAGER_ADDRESS: {e}")))?
+            .trim()
+            .parse::<Address>()
+            .map_err(|e| Error(format!("invalid ALIGNED_ETH_SERVICE_MANAGER_ADDRESS: {e}")))?;
 
         let eth_rpc_url = std::env::var("ETH_RPC_URL")
             .map_err(|e| Error(format!("ETH_RPC_URL: {e}")))?
@@ -86,6 +94,7 @@ impl AlignedRPC {
         Ok(Self {
             aligned_network,
             aligned_proof_generator_addr,
+            aligned_eth_service_manager_addr,
             eth_rpc_url,
             eth_chain_id,
             wallet,
@@ -97,20 +106,20 @@ impl AlignedRPC {
     pub async fn submit(
         &self,
         proof: MinaProof,
-    ) -> Result<AlignedVerificationData, Error> {
+    ) -> Result<AlignedVerificationData, AlignedError> {
         let (proof_bytes, pub_input, proving_system, proof_name) = match proof {
             MinaProof::State((proof, pub_input)) => {
                 let proof_bytes = bincode::serialize(&proof)
-                    .map_err(|e| Error(format!("failed to serialize state proof: {e}")))?;
+                    .map_err(|e| AlignedError::DataError(format!("failed to serialize state proof: {e}")))?;
                 let pub_input_bytes = bincode::serialize(&pub_input)
-                    .map_err(|e| Error(format!("failed to serialize state public inputs: {e}")))?;
+                    .map_err(|e| AlignedError::DataError(format!("failed to serialize state public inputs: {e}")))?;
                 (proof_bytes, pub_input_bytes, ProvingSystemId::Mina, "Mina Proof of State")
             }
             MinaProof::Account((proof, pub_input)) => {
                 let proof_bytes = bincode::serialize(&proof)
-                    .map_err(|e| Error(format!("failed to serialize account proof: {e}")))?;
+                    .map_err(|e| AlignedError::DataError(format!("failed to serialize account proof: {e}")))?;
                 let pub_input_bytes = bincode::serialize(&pub_input)
-                    .map_err(|e| Error(format!("failed to serialize account public inputs: {e}")))?;
+                    .map_err(|e| AlignedError::DataError(format!("failed to serialize account public inputs: {e}")))?;
                 (proof_bytes, pub_input_bytes, ProvingSystemId::MinaAccount, "Mina Proof of Account")
             }
         };
@@ -130,15 +139,17 @@ impl AlignedRPC {
             proof_generator_addr: proof_generator_addr_ethers,
         };
 
-        let max_fee = self.estimate_max_fee().await?;
-        let wallet = self.ethers_wallet()?;
+        let max_fee = self.estimate_max_fee().await
+            .map_err(|e| AlignedError::ConfigurationError(e.to_string()))?;
+        let wallet = self.ethers_wallet()
+            .map_err(|e| AlignedError::WalletError(e.to_string()))?;
 
         let nonce = aligned_sdk::verification_layer::get_nonce_from_batcher(
             self.aligned_network.clone(),
             wallet.address(),
         )
         .await
-        .map_err(|_| Error("failed to retrieve nonce from aligned batcher".to_string()))?;
+        .map_err(|e| AlignedError::RpcUnreachable(format!("failed to retrieve nonce from aligned batcher: {e:?}")))?;
 
         aligned_2::submit(
             &self.aligned_network,
@@ -149,23 +160,25 @@ impl AlignedRPC {
             proof_name,
         )
         .await
-        .map_err(|e| Error(e))
     }
 
     /// Single-shot check of whether a previously submitted proof has been verified on-chain.
+    /// Returns `Verified`, `Pending`, or `Failed` — see `BatchVerificationStatus`.
     pub async fn check_verification(
         &self,
         aligned_verification_data: &AlignedVerificationData,
         timeout: Duration,
-    ) -> Result<bool, Error> {
+    ) -> Result<BatchVerificationStatus, AlignedError> {
+        let eth_rpc_url = self.eth_rpc_url.parse::<reqwest::Url>()
+            .map_err(|e| AlignedError::RpcUnreachable(format!("invalid ETH_RPC_URL: {e}")))?;
         aligned_2::check_verification(
-            &self.eth_rpc_url,
+            &eth_rpc_url,
+            self.aligned_eth_service_manager_addr,
             &self.aligned_network,
             aligned_verification_data,
             timeout,
         )
         .await
-        .map_err(|e| Error(e))
     }
 
     /// Estimates the max batcher fee from env config.

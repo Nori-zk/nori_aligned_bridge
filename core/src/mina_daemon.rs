@@ -38,6 +38,7 @@ use mina_state_verifier::verify_mina_state;
 use crate::{
     proof::account_proof::{MerkleNode, MinaAccountProof, MinaAccountPubInputs},
     proof::state_proof::{MinaStatePubInputs, MinaStateProof},
+    rpcs::errors::MinaDaemonError,
     sol::account::MinaAccountValidationExample,
     utils::constants::{BRIDGE_TRANSITION_FRONTIER_LEN, MINA_DAEMON_MAX_QUERYABLE_BLOCKS},
 };
@@ -145,32 +146,32 @@ struct StateProofBlockQuery;
 ///
 /// # Returns
 ///
-/// The deserialized protocol state value on success, or a `String` error describing
+/// The deserialized protocol state value on success, or a `MinaDaemonError` describing
 /// the failure (network error, missing data, base64 decode failure, or binprot
 /// deserialization failure).
 pub async fn query_state(
     rpc_url: &str,
     state_hash: &StateHash,
-) -> Result<MinaStateProtocolStateValueStableV2, String> {
+) -> Result<MinaStateProtocolStateValueStableV2, MinaDaemonError> {
     let variables = state_query::Variables {
         state_hash: state_hash.to_string(),
     };
     info!("Querying state {}", variables.state_hash);
     let client = reqwest::Client::new();
-    let proof = post_graphql::<StateQuery, _>(&client, rpc_url, variables)
-        .await
-        .map_err(|err| err.to_string())?
-        .data
-        .ok_or("Missing state query response data".to_string())
-        .map(|response| response.protocol_state)
-        .and_then(|base64| {
-            BASE64_STANDARD
-                .decode(base64)
-                .map_err(|err| format!("Couldn't decode state from base64: {err}"))
-        })
+    let response = post_graphql::<StateQuery, _>(&client, rpc_url, variables).await?;
+    if let Some(errors) = response.errors {
+        if !errors.is_empty() {
+            let msgs: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
+            return Err(MinaDaemonError::GraphQLError(msgs.join("; ")));
+        }
+    }
+    let data = response.data.ok_or_else(|| MinaDaemonError::MalformedResponse("missing response data".into()))?;
+    let proof = BASE64_STANDARD
+        .decode(data.protocol_state)
+        .map_err(|err| MinaDaemonError::MalformedResponse(format!("Couldn't decode state from base64: {err}")))
         .and_then(|binprot| {
             MinaStateProtocolStateValueStableV2::binprot_read(&mut binprot.as_slice())
-                .map_err(|err| format!("Couldn't read state binprot: {err}"))
+                .map_err(|err| MinaDaemonError::MalformedResponse(format!("Couldn't read state binprot: {err}")))
         })?;
     Ok(proof)
 }
@@ -187,31 +188,34 @@ pub async fn query_state(
 /// # Returns
 ///
 /// A `Vec` of `(StateHash, block_height)` tuples ordered oldest-to-newest (the order
-/// returned by the daemon's `bestChain` query), or a `String` error.
+/// returned by the daemon's `bestChain` query), or a `MinaDaemonError`.
 pub async fn query_frontier(
     rpc_url: &str,
     max_length: usize,
-) -> Result<Vec<(StateHash, u64)>, String> {
+) -> Result<Vec<(StateHash, u64)>, MinaDaemonError> {
     let client = reqwest::Client::new();
     let variables = frontier_query::Variables {
         max_length: max_length
             .try_into()
-            .map_err(|_| "Frontier length conversion failure".to_string())?,
+            .map_err(|_| MinaDaemonError::BadRequest("Frontier length conversion failure".into()))?,
     };
-    let response = post_graphql::<FrontierQuery, _>(&client, rpc_url, variables)
-        .await
-        .map_err(|err| err.to_string())?
-        .data
-        .ok_or("Missing frontier query response data".to_string())?;
-    let best_chain = response
+    let response = post_graphql::<FrontierQuery, _>(&client, rpc_url, variables).await?;
+    if let Some(errors) = response.errors {
+        if !errors.is_empty() {
+            let msgs: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
+            return Err(MinaDaemonError::GraphQLError(msgs.join("; ")));
+        }
+    }
+    let data = response.data.ok_or_else(|| MinaDaemonError::MalformedResponse("missing response data".into()))?;
+    let best_chain = data
         .best_chain
-        .ok_or("Missing best chain field".to_string())?;
+        .ok_or_else(|| MinaDaemonError::MalformedResponse("Missing best chain field".into()))?;
     if best_chain.len() != max_length {
-        return Err(format!(
+        return Err(MinaDaemonError::MalformedResponse(format!(
             "Expected {} blocks from frontier query, got {}",
             max_length,
             best_chain.len()
-        ));
+        )));
     }
     best_chain
         .into_iter()
@@ -222,7 +226,7 @@ pub async fn query_frontier(
                 .consensus_state
                 .block_height
                 .parse()
-                .map_err(|_| "Block height conversion failure".to_string())?;
+                .map_err(|_| MinaDaemonError::MalformedResponse("Block height conversion failure".into()))?;
             Ok((state_hash, block_height))
         })
         .collect()
@@ -241,7 +245,7 @@ pub async fn query_frontier(
 ///
 /// # Returns
 ///
-/// A tuple of `(state_hashes, ledger_hashes, proofs)` on success, or a `String` error.
+/// A tuple of `(state_hashes, ledger_hashes, proofs)` on success, or a `MinaDaemonError`.
 /// Each proof is base64-decoded and binprot-deserialized into `MinaBaseProofStableV2`.
 ///
 /// # Limitation
@@ -259,23 +263,22 @@ pub async fn query_state_proof_candidate_chain(
         Vec<LedgerHash>,
         Vec<MinaBaseProofStableV2>,
     ),
-    String,
+    MinaDaemonError,
 > {
     info!("Querying candidate chain for state proof construction with max_length={max_length}");
     let client = reqwest::Client::new();
     let variables = best_chain_query::Variables {
         max_length: max_length
             .try_into()
-            .map_err(|_| "max_length conversion failure".to_string())?,
+            .map_err(|_| MinaDaemonError::BadRequest("max_length conversion failure".into()))?,
     };
     let response = post_graphql::<BestChainQuery, _>(&client, rpc_url, variables)
-        .await
-        .map_err(|err| err.to_string())?
+        .await?
         .data
-        .ok_or("Missing candidate query response data".to_string())?;
+        .ok_or_else(|| MinaDaemonError::MalformedResponse("Missing candidate query response data".into()))?;
     let best_chain = response
         .best_chain
-        .ok_or("Missing best chain field".to_string())?;
+        .ok_or_else(|| MinaDaemonError::MalformedResponse("Missing best chain field".into()))?;
 
     let chain_state_hashes: Vec<StateHash> = best_chain
         .iter()
@@ -298,15 +301,15 @@ pub async fn query_state_proof_candidate_chain(
                 .protocol_state_proof
                 .base64
                 .clone()
-                .ok_or("Missing protocol state proof base64".to_string())
+                .ok_or_else(|| MinaDaemonError::MalformedResponse("Missing protocol state proof base64".into()))
                 .and_then(|base64| {
                     BASE64_URL_SAFE
                         .decode(base64)
-                        .map_err(|err| format!("Couldn't decode state proof from base64: {err}"))
+                        .map_err(|err| MinaDaemonError::MalformedResponse(format!("Couldn't decode state proof from base64: {err}")))
                 })
                 .and_then(|binprot| {
                     MinaBaseProofStableV2::binprot_read(&mut binprot.as_slice())
-                        .map_err(|err| format!("Couldn't read state proof binprot: {err}"))
+                        .map_err(|err| MinaDaemonError::MalformedResponse(format!("Couldn't read state proof binprot: {err}")))
                 })
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -377,7 +380,7 @@ async fn query_account(
     state_hash: &str,
     public_key: &str,
     token_id: &str
-) -> Result<(MinaAccount, Fp, Vec<MerkleNode>), String> {
+) -> Result<(MinaAccount, Fp, Vec<MerkleNode>), MinaDaemonError> {
     info!(
         "Querying account[public_key:{public_key}, token_id:{token_id}], its merkle proof and ledger hash for state {state_hash}"
     );
@@ -400,10 +403,17 @@ async fn query_account(
         .post(rpc_url)
         .json(&request_body)
         .send()
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
-    let response_text = response.text().await.map_err(|e| e.to_string())?;
+    let response_text = response.text().await.map_err(|e: reqwest::Error| {
+        // .text() can fail due to body decoding (charset, content-encoding)
+        // or due to the connection dropping mid-stream.
+        if e.is_decode() {
+            MinaDaemonError::MalformedResponse(format!("failed to read response body: {e}"))
+        } else {
+            MinaDaemonError::RpcUnreachable(format!("failed to read response body: {e}"))
+        }
+    })?;
     info!("Raw response body: {}", response_text);
 
     /*
@@ -411,26 +421,32 @@ async fn query_account(
     info!("Raw response body: {}", response_text);
     */
     let response: graphql_client::Response<account_query::ResponseData> =
-        serde_json::from_str(&response_text).map_err(|e| format!("Failed to parse JSON: {}", e))?;
+        serde_json::from_str(&response_text).map_err(|e| MinaDaemonError::MalformedResponse(format!("Failed to parse JSON: {}", e)))?;
 
+    if let Some(errors) = response.errors {
+        if !errors.is_empty() {
+            let msgs: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
+            return Err(MinaDaemonError::GraphQLError(msgs.join("; ")));
+        }
+    }
     let response = response
         .data
-        .ok_or("Missing merkle query response data".to_string())?;
+        .ok_or_else(|| MinaDaemonError::MalformedResponse("missing response data".into()))?;
 
     let membership = response
         .encoded_snarked_ledger_account_membership
         .first()
-        .ok_or("Failed to retrieve membership query field".to_string())?;
+        .ok_or_else(|| MinaDaemonError::AccountNotFound("Failed to retrieve membership query field".into()))?;
 
     let account_bytes = BASE64_STANDARD
         .decode(&membership.account)
-        .map_err(|err| format!("Failed to decode account from base64: {err}"))?;
+        .map_err(|err| MinaDaemonError::MalformedResponse(format!("Failed to decode account from base64: {err}")))?;
 
     info!("Decoded account bytes length: {}", account_bytes.len());
     info!("Decoded account bytes (hex): {}", hex::encode(&account_bytes));
 
     let account = MinaAccount::binprot_read(&mut account_bytes.as_slice())
-        .map_err(|err| format!("Failed to deserialize account binprot: {err}"))?;
+        .map_err(|err| MinaDaemonError::MalformedResponse(format!("Failed to deserialize account binprot: {err}")))?;
 
     info!("=== Decoded MinaAccount ===");
     info!("Public Key: {:?}", account.public_key);
@@ -452,7 +468,7 @@ async fn query_account(
         .blockchain_state
         .snarked_ledger_hash
         .to_fp()
-        .map_err(|_| "Failed to convert snarked_ledger_hash to field element".to_string())?;
+        .map_err(|_| MinaDaemonError::MalformedResponse("Failed to convert snarked_ledger_hash to field element".into()))?;
 
     let merkle_path = membership
         .merkle_path
@@ -465,7 +481,7 @@ async fn query_account(
             }
         })
         .collect::<Result<Vec<_>, ()>>()
-        .map_err(|_| "Error deserializing merkle path nodes".to_string())?;
+        .map_err(|_| MinaDaemonError::MalformedResponse("Error deserializing merkle path nodes".into()))?;
 
     Ok((account, ledger_hash, merkle_path))
 }
@@ -491,11 +507,13 @@ pub async fn get_mina_proof_of_account(
     token_id: &str,
     state_hash: &str,
     rpc_url: &str,
-) -> Result<(MinaAccountProof, MinaAccountPubInputs), String> {
+) -> Result<(MinaAccountProof, MinaAccountPubInputs), MinaDaemonError> {
     let (account, ledger_hash, merkle_path) =
         query_account(rpc_url, state_hash, public_key, token_id).await?;
 
-    let encoded_account = MinaAccountValidationExample::Account::try_from(&account)?.abi_encode();
+    let encoded_account = MinaAccountValidationExample::Account::try_from(&account)
+        .map_err(|e| MinaDaemonError::SerializationError(e))?
+        .abi_encode();
 
     info!(
         "Retrieved proof of account for ledger {}",
@@ -537,7 +555,7 @@ pub async fn less_insane_get_mina_proof_of_state(
     is_devnet: bool,
     group_finalization_block_height: u64,
     group_finalization_state_hash: &str,
-) -> Result<(MinaStateProof, MinaStatePubInputs), String> {
+) -> Result<(MinaStateProof, MinaStatePubInputs), MinaDaemonError> {
     let client = reqwest::Client::new();
 
     // We need 32 round trips total: 16 block(height:) + 16 query_state. Naively this
@@ -556,12 +574,16 @@ pub async fn less_insane_get_mina_proof_of_state(
             let variables = state_proof_block_query::Variables {
                 height: height as i64,
             };
-            let response = post_graphql::<StateProofBlockQuery, _>(&client, &rpc_url, variables)
-                .await
-                .map_err(|err| format!("block(height:{height}): {err}"))?;
+            let response = post_graphql::<StateProofBlockQuery, _>(&client, &rpc_url, variables).await?;
+            if let Some(errors) = response.errors {
+                if !errors.is_empty() {
+                    let msgs: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
+                    return Err(MinaDaemonError::GraphQLError(msgs.join("; ")));
+                }
+            }
             let block = response
                 .data
-                .ok_or_else(|| format!("block(height:{height}): missing response data"))?
+                .ok_or_else(|| MinaDaemonError::MalformedResponse(format!("block(height:{height}): missing response data")))?
                 .block;
 
             let state_hash: StateHash = block.state_hash.clone();
@@ -573,15 +595,15 @@ pub async fn less_insane_get_mina_proof_of_state(
             let proof = block
                 .protocol_state_proof
                 .base64
-                .ok_or_else(|| format!("block(height:{height}): missing protocol state proof base64"))
+                .ok_or_else(|| MinaDaemonError::MalformedResponse(format!("block(height:{height}): missing protocol state proof base64")))
                 .and_then(|b64| {
                     BASE64_URL_SAFE
                         .decode(b64)
-                        .map_err(|err| format!("block(height:{height}): base64 decode: {err}"))
+                        .map_err(|err| MinaDaemonError::MalformedResponse(format!("block(height:{height}): base64 decode: {err}")))
                 })
                 .and_then(|binprot| {
                     MinaBaseProofStableV2::binprot_read(&mut binprot.as_slice())
-                        .map_err(|err| format!("block(height:{height}): binprot read: {err}"))
+                        .map_err(|err| MinaDaemonError::MalformedResponse(format!("block(height:{height}): binprot read: {err}")))
                 })?;
 
             // Second call in the pair: query_state for the full protocol state, using
@@ -589,7 +611,7 @@ pub async fn less_insane_get_mina_proof_of_state(
             // within this future but runs concurrently with the other 15 pairs.
             let protocol_state = query_state(&rpc_url, &state_hash).await?;
 
-            Ok::<_, String>((state_hash, ledger_hash, proof, protocol_state))
+            Ok::<_, MinaDaemonError>((state_hash, ledger_hash, proof, protocol_state))
         }
     });
 
@@ -602,10 +624,10 @@ pub async fn less_insane_get_mina_proof_of_state(
     // Verify F_g's state hash matches what the caller expects.
     let (ref fg_state_hash, _, _, _) = results[0];
     if fg_state_hash.to_string() != group_finalization_state_hash {
-        return Err(format!(
+        return Err(MinaDaemonError::StateHashMismatch(format!(
             "State hash mismatch at F_g (height {group_finalization_block_height}): \
              expected {group_finalization_state_hash}, got {fg_state_hash}"
-        ));
+        )));
     }
 
     // Unzip into the fixed-size arrays and vecs needed by the proof structs.
@@ -622,17 +644,17 @@ pub async fn less_insane_get_mina_proof_of_state(
 
     let candidate_chain_state_hashes: [StateHash; BRIDGE_TRANSITION_FRONTIER_LEN] =
         state_hashes_vec.try_into()
-            .map_err(|_| "Failed to convert state hashes to fixed array".to_string())?;
+            .map_err(|_| MinaDaemonError::MalformedResponse("Failed to convert state hashes to fixed array".into()))?;
     let candidate_chain_ledger_hashes: [LedgerHash; BRIDGE_TRANSITION_FRONTIER_LEN] =
         ledger_hashes_vec.try_into()
-            .map_err(|_| "Failed to convert ledger hashes to fixed array".to_string())?;
+            .map_err(|_| MinaDaemonError::MalformedResponse("Failed to convert ledger hashes to fixed array".into()))?;
     let candidate_tip_proof = proofs_vec.pop()
-        .ok_or("Empty proofs vec".to_string())?;
+        .ok_or_else(|| MinaDaemonError::MalformedResponse("Empty proofs vec".into()))?;
     let group_finalization_state = states_vec[0].clone();
 
     let candidate_tip_state_hash = candidate_chain_state_hashes
         .last()
-        .ok_or_else(|| "Missing candidate tip state hash".to_string())?;
+        .ok_or_else(|| MinaDaemonError::MalformedResponse("Missing candidate tip state hash".into()))?;
     info!("Queried Mina candidate chain with tip {candidate_tip_state_hash} and F_g at {group_finalization_state_hash}");
 
     let mina_state_proof = MinaStateProof {
@@ -648,14 +670,14 @@ pub async fn less_insane_get_mina_proof_of_state(
     };
 
     let proof_bytes = bincode::serialize(&mina_state_proof)
-        .map_err(|e| format!("Failed to serialize state proof: {e}"))?;
+        .map_err(|e| MinaDaemonError::SerializationError(format!("Failed to serialize state proof: {e}")))?;
     let pub_input_bytes = bincode::serialize(&mina_state_pub_inputs)
-        .map_err(|e| format!("Failed to serialize public inputs: {e}"))?;
+        .map_err(|e| MinaDaemonError::SerializationError(format!("Failed to serialize public inputs: {e}")))?;
     // FIXME i really dont like have a private copy of this here
     // we should import this from some 3rd party repo and not have
     // a copy pasted version of our own
     if !verify_mina_state(&proof_bytes, &pub_input_bytes) {
-        return Err("Mina state proof verification failed".to_string());
+        return Err(MinaDaemonError::LocalVerificationFailed("Mina state proof verification failed".into()));
     }
     info!("Mina state proof verification passed");
 
@@ -707,20 +729,20 @@ pub async fn get_mina_proof_of_state(
     is_devnet: bool,
     group_finalization_block_height: u64,
     group_finalization_state_hash: &str,
-) -> Result<(MinaStateProof, MinaStatePubInputs), String> {
+) -> Result<(MinaStateProof, MinaStatePubInputs), MinaDaemonError> {
     let (_, live_tip_height) = query_frontier(rpc_url, 1)
         .await?
         .into_iter().next()
-        .ok_or_else(|| "Empty frontier response".to_string())?;
+        .ok_or_else(|| MinaDaemonError::MalformedResponse("Empty frontier response".into()))?;
 
     // Bail early if the total number of blocks we would need to request from the daemon
     // (distance to F_g + the 16-block proof window + buffer) exceeds its queryable limit.
     let group_finalization_distance_from_tip = live_tip_height as usize - group_finalization_block_height as usize;
     if group_finalization_distance_from_tip + BRIDGE_TRANSITION_FRONTIER_LEN + BEST_CHAIN_QUERY_BUFFER > MINA_DAEMON_MAX_QUERYABLE_BLOCKS {
-        return Err(format!(
+        return Err(MinaDaemonError::BlockTooOld(format!(
             "group_finalization_block_height {group_finalization_block_height} is too old: \
              {group_finalization_distance_from_tip} blocks behind tip {live_tip_height}, exceeds daemon limit of {MINA_DAEMON_MAX_QUERYABLE_BLOCKS}"
-        ));
+        )));
     }
 
     let best_chain_max_length = group_finalization_distance_from_tip
@@ -740,25 +762,25 @@ pub async fn get_mina_proof_of_state(
     let fg_index = chain_state_hashes
         .iter()
         .position(|h| h.to_string() == group_finalization_state_hash)
-        .ok_or_else(|| format!(
+        .ok_or_else(|| MinaDaemonError::StateHashMismatch(format!(
             "group_finalization_state_hash {group_finalization_state_hash} not found in \
              bestChain response of {best_chain_max_length} blocks"
-        ))?;
+        )))?;
     let fg_end = fg_index + BRIDGE_TRANSITION_FRONTIER_LEN;
     if fg_end > chain_state_hashes.len() {
-        return Err(format!(
+        return Err(MinaDaemonError::MalformedResponse(format!(
             "Not enough blocks after F_g: need {BRIDGE_TRANSITION_FRONTIER_LEN} but only {} available",
             chain_state_hashes.len() - fg_index
-        ));
+        )));
     }
 
     // Slice the 16-block window: F_g is the oldest, F_g + 15 is the tip we prove.
     let candidate_chain_state_hashes: [StateHash; BRIDGE_TRANSITION_FRONTIER_LEN] =
         chain_state_hashes[fg_index..fg_end].to_vec().try_into()
-            .map_err(|_| "Failed to convert state hashes to fixed array".to_string())?;
+            .map_err(|_| MinaDaemonError::MalformedResponse("Failed to convert state hashes to fixed array".into()))?;
     let candidate_chain_ledger_hashes: [LedgerHash; BRIDGE_TRANSITION_FRONTIER_LEN] =
         chain_ledger_hashes[fg_index..fg_end].to_vec().try_into()
-            .map_err(|_| "Failed to convert ledger hashes to fixed array".to_string())?;
+            .map_err(|_| MinaDaemonError::MalformedResponse("Failed to convert ledger hashes to fixed array".into()))?;
     let candidate_tip_proof = chain_proofs[fg_end - 1].clone();
 
     // Fetch full protocol states for the 16-block window (needed for consensus checks).
@@ -778,7 +800,7 @@ pub async fn get_mina_proof_of_state(
 
     let candidate_tip_state_hash = candidate_chain_state_hashes
         .last()
-        .ok_or_else(|| "Missing candidate tip state hash".to_string())?;
+        .ok_or_else(|| MinaDaemonError::MalformedResponse("Missing candidate tip state hash".into()))?;
     info!("Queried Mina candidate chain with tip {candidate_tip_state_hash} and F_g at {group_finalization_state_hash}");
 
     let mina_state_proof = MinaStateProof {
@@ -794,14 +816,14 @@ pub async fn get_mina_proof_of_state(
     };
 
     let proof_bytes = bincode::serialize(&mina_state_proof)
-        .map_err(|e| format!("Failed to serialize state proof: {e}"))?;
+        .map_err(|e| MinaDaemonError::SerializationError(format!("Failed to serialize state proof: {e}")))?;
     let pub_input_bytes = bincode::serialize(&mina_state_pub_inputs)
-        .map_err(|e| format!("Failed to serialize public inputs: {e}"))?;
+        .map_err(|e| MinaDaemonError::SerializationError(format!("Failed to serialize public inputs: {e}")))?;
     // FIXME i really dont like have a private copy of this here
     // we should import this from some 3rd party repo and not have
     // a copy pasted version of our own
     if !verify_mina_state(&proof_bytes, &pub_input_bytes) {
-        return Err("Mina state proof verification failed".to_string());
+        return Err(MinaDaemonError::LocalVerificationFailed("Mina state proof verification failed".into()));
     }
     info!("Mina state proof verification passed");
 

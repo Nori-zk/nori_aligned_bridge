@@ -110,9 +110,8 @@ pub async fn unlock_nori_token(
 
     info!("Creating contract instance");
     let provider = ProviderBuilder::new()
-        .with_recommended_fillers()
         .wallet(wallet_data.wallet)
-        .on_http(
+        .connect_http(
             reqwest::Url::parse(eth_rpc_url)
                 .map_err(|err| err.to_string())
                 .unwrap(),
