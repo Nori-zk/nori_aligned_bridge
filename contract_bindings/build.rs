@@ -88,6 +88,12 @@ fn main() {
         manifest_dir.join("bridge-sdk.ref").display()
     );
 
+    // Re-run when the abi/ directory is missing or its contents change
+    println!(
+        "cargo:rerun-if-changed={}",
+        abi_dir.display()
+    );
+
     // Check if lib.rs already has generated bindings
     let bindings_generated = std::fs::read_to_string(&gen_path)
         .is_ok_and(|content| !content.trim().contains(GENERATED_BINDINGS_HEADER.trim()));
