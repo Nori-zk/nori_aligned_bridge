@@ -4,6 +4,8 @@ pub mod aligned;
 pub mod eth;
 /// Decoupled Ethereum primitives for bridge workers (send/confirm split).
 pub mod eth_2;
+/// Ethereum contract deployment primitives.
+pub mod eth_2_deploy;
 /// Interacts with a Mina node for requesting proofs and data.
 pub mod mina;
 /// Interacts with a Mina archive node for querying events.

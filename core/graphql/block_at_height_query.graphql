@@ -1,0 +1,5 @@
+query BlockAtHeightQuery($height: Int!) {
+    block(height: $height) {
+        stateHash
+    }
+}

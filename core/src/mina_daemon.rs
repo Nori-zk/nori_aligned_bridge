@@ -135,6 +135,18 @@ struct FrontierQuery;
 )]
 struct StateProofBlockQuery;
 
+/// Lightweight query for a single block's state hash by height.
+///
+/// GraphQL: `block(height: $height)` returning only `stateHash`.
+///
+/// Used by `query_block_state_hash_at_height`.
+#[derive(GraphQLQuery)]
+#[graphql(
+    schema_path = "graphql/mina_schema.json",
+    query_path = "graphql/block_at_height_query.graphql"
+)]
+struct BlockAtHeightQuery;
+
 // --- Primitive query functions ---
 
 /// Queries a single protocol state from the Mina daemon by state hash.
@@ -230,6 +242,82 @@ pub async fn query_frontier(
             Ok((state_hash, block_height))
         })
         .collect()
+}
+
+/// Queries the daemon for the state hash of the block at `height`.
+///
+/// # What this does
+///
+/// Sends `block(height: N)` to the Mina daemon, which returns the state hash of
+/// whichever block the daemon currently considers canonical at that height. This is a
+/// lightweight query that fetches only the state hash (no proofs, no ledger hashes).
+///
+/// # THIS IS A BEST-EFFORT CANONICALITY CHECK -- READ CAREFULLY
+///
+/// The Mina protocol does not have deterministic finality. There is no on-chain flag,
+/// no RPC method, and no oracle that can guarantee a block is permanently canonical.
+/// Mina uses Ouroboros proof-of-stake consensus where finality is probabilistic: the
+/// deeper a block is buried under subsequent blocks, the less likely it is to be
+/// reorged, but the probability never reaches zero.
+///
+/// What this function actually returns is the daemon's CURRENT consensus view of which
+/// block is canonical at the given height. The daemon maintains a transition frontier
+/// of approximately `MINA_DAEMON_MAX_QUERYABLE_BLOCKS` (290) recent blocks, and within
+/// that window it has resolved all forks using consensus rules. The block it returns is
+/// the one on the winning fork RIGHT NOW.
+///
+/// According to o1labs, Mina has never experienced a reorg deeper than approximately 11
+/// blocks. The bridge classifier calls this function only after a burn's detection block
+/// is at least `BRIDGE_TRANSITION_FRONTIER_LEN - 1` (15) blocks deep. At that depth, a
+/// reorg is extremely unlikely based on all observed network history, but it is not
+/// impossible.
+///
+/// If the daemon reorgs after this function returns, the state hash it returned may no
+/// longer be canonical. The caller is responsible for understanding that this answer
+/// can, in theory, become stale.
+///
+/// # Errors
+///
+/// Returns `MinaDaemonError::BlockNotInFrontier` when the daemon responds with "Could
+/// not find block in transition frontier". This means the daemon cannot answer for this
+/// height -- it does NOT mean the block is non-canonical. Possible causes: the block is
+/// older than ~290 blocks from the tip, the daemon just restarted with an incomplete
+/// frontier, or the height has not been reached yet.
+///
+/// Returns other `MinaDaemonError` variants for infrastructure failures: the daemon is
+/// unreachable, returned malformed data, or something unexpected happened.
+///
+/// All errors are about the daemon's ability to answer, never about the block's
+/// canonicality.
+pub async fn best_effort_canonical_state_hash_at_height(
+    rpc_url: &str,
+    height: u64,
+) -> Result<String, MinaDaemonError> {
+    let client = reqwest::Client::new();
+    let variables = block_at_height_query::Variables {
+        height: height as i64,
+    };
+    let response = post_graphql::<BlockAtHeightQuery, _>(&client, rpc_url, variables).await?;
+    if let Some(errors) = &response.errors {
+        if !errors.is_empty() {
+            let msgs: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
+            let joined = msgs.join("; ");
+            if joined.contains("Could not find block in transition frontier") {
+                return Err(MinaDaemonError::BlockNotInFrontier(format!(
+                    "height {height}: {joined}"
+                )));
+            }
+            return Err(MinaDaemonError::GraphQLError(joined));
+        }
+    }
+    let state_hash = response
+        .data
+        .ok_or_else(|| MinaDaemonError::MalformedResponse(
+            format!("block(height:{height}): no errors but response data is null"),
+        ))?
+        .block
+        .state_hash;
+    Ok(state_hash.to_string())
 }
 
 /// Queries the best chain with a caller-specified `max_length` and returns state hashes,
@@ -558,18 +646,19 @@ pub async fn less_insane_get_mina_proof_of_state(
 ) -> Result<(MinaStateProof, MinaStatePubInputs), MinaDaemonError> {
     let client = reqwest::Client::new();
 
-    // We need 32 round trips total: 16 block(height:) + 16 query_state. Naively this
-    // would be two sequential batches of 16, but we can do better. Each block query is
-    // independent and its result (the state hash) is the only input needed for the
-    // corresponding query_state call. So we pair them: for each height, fire
-    // block(height:) then immediately chain query_state on the result. All 16 pairs
-    // run concurrently via join_all, giving a wall-clock cost of 2 sequential round
-    // trips (one block + one state) instead of 32.
+    // We need 32 round trips total: 16 block(height:) + 16 query_state. Each pair
+    // (block + state) is sequential, but all 16 pairs run concurrently. Concurrency
+    // is capped at 4 to avoid overwhelming the Mina daemon -- at higher concurrency
+    // the daemon returns empty response bodies for some requests.
+    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(4));
     let block_futures = (0..BRIDGE_TRANSITION_FRONTIER_LEN).map(|i| {
+        let semaphore = semaphore.clone();
         let height = group_finalization_block_height + i as u64;
         let client = client.clone();
         let rpc_url = rpc_url.to_owned();
         async move {
+            let _permit = semaphore.acquire().await
+                .map_err(|_| MinaDaemonError::BadRequest("semaphore closed".into()))?;
             // First call in the pair: block(height:) for state hash, ledger hash, proof.
             let variables = state_proof_block_query::Variables {
                 height: height as i64,
@@ -669,6 +758,7 @@ pub async fn less_insane_get_mina_proof_of_state(
         candidate_chain_ledger_hashes,
     };
 
+    info!("Serializing state proof and public inputs for local verification...");
     let proof_bytes = bincode::serialize(&mina_state_proof)
         .map_err(|e| MinaDaemonError::SerializationError(format!("Failed to serialize state proof: {e}")))?;
     let pub_input_bytes = bincode::serialize(&mina_state_pub_inputs)
@@ -676,10 +766,13 @@ pub async fn less_insane_get_mina_proof_of_state(
     // FIXME i really dont like have a private copy of this here
     // we should import this from some 3rd party repo and not have
     // a copy pasted version of our own
+    info!("Running local Pickles verification (this can take minutes)...");
+    let start = std::time::Instant::now();
+    // TODO: re-enable local Pickles verification once it is stable
     if !verify_mina_state(&proof_bytes, &pub_input_bytes) {
-        return Err(MinaDaemonError::LocalVerificationFailed("Mina state proof verification failed".into()));
+         return Err(MinaDaemonError::LocalVerificationFailed("Mina state proof verification failed".into()));
     }
-    info!("Mina state proof verification passed");
+    info!("Mina state proof verification passed in {:.1}s", start.elapsed().as_secs_f64());
 
     Ok((mina_state_proof, mina_state_pub_inputs))
 }
@@ -784,12 +877,21 @@ pub async fn get_mina_proof_of_state(
     let candidate_tip_proof = chain_proofs[fg_end - 1].clone();
 
     // Fetch full protocol states for the 16-block window (needed for consensus checks).
-    // This is where the additional 16 round trips come from -- join_all fires them in
-    // parallel but they are still 16 individual GraphQL calls.
+    // Concurrency capped at 4 to avoid reqwest HTTP/2 multiplexing bug where the daemon
+    // returns empty response bodies under high concurrency.
+    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(4));
     let candidate_chain_states: Vec<MinaStateProtocolStateValueStableV2> = join_all(
         candidate_chain_state_hashes
             .iter()
-            .map(|state_hash| query_state(rpc_url, state_hash)),
+            .map(|state_hash| {
+                let semaphore = semaphore.clone();
+                let rpc_url = rpc_url.to_owned();
+                async move {
+                    let _permit = semaphore.acquire().await
+                        .map_err(|_| MinaDaemonError::BadRequest("semaphore closed".into()))?;
+                    query_state(&rpc_url, state_hash).await
+                }
+            }),
     )
     .await
     .into_iter()
@@ -815,6 +917,7 @@ pub async fn get_mina_proof_of_state(
         candidate_chain_ledger_hashes,
     };
 
+    info!("Serializing state proof and public inputs for local verification...");
     let proof_bytes = bincode::serialize(&mina_state_proof)
         .map_err(|e| MinaDaemonError::SerializationError(format!("Failed to serialize state proof: {e}")))?;
     let pub_input_bytes = bincode::serialize(&mina_state_pub_inputs)
@@ -822,10 +925,13 @@ pub async fn get_mina_proof_of_state(
     // FIXME i really dont like have a private copy of this here
     // we should import this from some 3rd party repo and not have
     // a copy pasted version of our own
+    info!("Running local Pickles verification (this can take minutes)...");
+    let start = std::time::Instant::now();
+    // TODO: re-enable local Pickles verification once it is stable
     if !verify_mina_state(&proof_bytes, &pub_input_bytes) {
         return Err(MinaDaemonError::LocalVerificationFailed("Mina state proof verification failed".into()));
     }
-    info!("Mina state proof verification passed");
+    info!("Mina state proof verification passed in {:.1}s", start.elapsed().as_secs_f64());
 
     Ok((mina_state_proof, mina_state_pub_inputs))
 }

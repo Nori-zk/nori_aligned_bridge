@@ -37,6 +37,13 @@ pub enum MinaDaemonError {
     /// The daemon only keeps MINA_DAEMON_MAX_QUERYABLE_BLOCKS (290) blocks.
     BlockTooOld(String),
 
+    /// The daemon's transition frontier does not contain a block at the requested
+    /// height. This can mean the block has fallen off the ~290-block frontier
+    /// (too old), the daemon has just restarted and has not yet built a full
+    /// frontier, or the height has not been reached yet (future block). The daemon
+    /// cannot tell us which case it is -- only that it cannot answer.
+    BlockNotInFrontier(String),
+
     /// The account or account membership proof was not found for the
     /// given public key / token ID / state hash combination.
     AccountNotFound(String),
@@ -65,6 +72,7 @@ impl fmt::Display for MinaDaemonError {
             Self::StateHashMismatch(msg) => write!(f, "state hash mismatch: {msg}"),
             Self::LocalVerificationFailed(msg) => write!(f, "local verification failed: {msg}"),
             Self::BlockTooOld(msg) => write!(f, "block too old: {msg}"),
+            Self::BlockNotInFrontier(msg) => write!(f, "block not in frontier: {msg}"),
             Self::AccountNotFound(msg) => write!(f, "account not found: {msg}"),
             Self::MalformedResponse(msg) => write!(f, "malformed response: {msg}"),
             Self::BadRequest(msg) => write!(f, "bad request: {msg}"),

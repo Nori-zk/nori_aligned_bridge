@@ -29,6 +29,11 @@ impl MinaArchiveRPC {
 
     /// Returns the state hash of the canonical block at `height`, or `None` if the archive
     /// node has no canonical block recorded at that height.
+    #[deprecated(note = "The archive node only assigns canonical status to blocks that have \
+        fallen off the daemon's 290-block transition frontier (MINA_DAEMON_MAX_QUERYABLE_BLOCKS). \
+        The daemon can only generate proofs for blocks within that same 290-block window. This \
+        creates a deadlock: by the time the archive marks a block canonical, the daemon can no \
+        longer prove it. Burns classified via this fallback will be stuck unprovable.")]
     pub async fn query_canonical_block_at_height(
         &self,
         height: u64,

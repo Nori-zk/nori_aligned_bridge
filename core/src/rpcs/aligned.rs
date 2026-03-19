@@ -63,11 +63,11 @@ impl AlignedRPC {
                 .map_err(|e| Error(format!("ALIGNED_NETWORK: {e}")))?,
         )?;
 
-        let aligned_proof_generator_addr = std::env::var("ALIGNED_PROOF_GENERATOR_ADDR")
-            .map_err(|e| Error(format!("ALIGNED_PROOF_GENERATOR_ADDR: {e}")))?
+        let aligned_proof_generator_addr = std::env::var("ALIGNED_PROOF_GENERATOR_ADDRESS")
+            .map_err(|e| Error(format!("ALIGNED_PROOF_GENERATOR_ADDRESS: {e}")))?
             .trim()
             .parse::<Address>()
-            .map_err(|e| Error(format!("invalid ALIGNED_PROOF_GENERATOR_ADDR: {e}")))?;
+            .map_err(|e| Error(format!("invalid ALIGNED_PROOF_GENERATOR_ADDRESS: {e}")))?;
 
         let aligned_eth_service_manager_addr = std::env::var("ALIGNED_ETH_SERVICE_MANAGER_ADDRESS")
             .map_err(|e| Error(format!("ALIGNED_ETH_SERVICE_MANAGER_ADDRESS: {e}")))?

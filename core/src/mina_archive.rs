@@ -102,6 +102,11 @@ pub async fn detect_zk_app_events(
 /// `canonical: true` is required in the filter: the archive stores both canonical and orphaned
 /// blocks at the same height, and the `Block` return type does not include a `canonical` field,
 /// so without the filter there is no way to identify the canonical block from the response.
+#[deprecated(note = "The archive node only assigns canonical status to blocks that have \
+    fallen off the daemon's 290-block transition frontier (MINA_DAEMON_MAX_QUERYABLE_BLOCKS). \
+    The daemon can only generate proofs for blocks within that same 290-block window. This \
+    creates a deadlock: by the time the archive marks a block canonical, the daemon can no \
+    longer prove it. Burns classified via this fallback will be stuck unprovable.")]
 pub async fn query_canonical_block_at_height(
     rpc_url: &str,
     height: u64,
