@@ -12,6 +12,8 @@ const RAW_BASE: &str = "https://raw.githubusercontent.com/Nori-zk/nori-bridge-sd
 /// Each entry follows the repo convention: contracts/ethereum/artifacts/contracts/{NAME}.sol/{NAME}.json
 const CONTRACTS: &[&str] = &[
     "NoriTokenBridge",
+    "MinaAccountValidation",
+    "MinaStateSettlement",
 ];
 
 /// Configures Git to ignore local changes to the generated bindings file.
