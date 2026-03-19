@@ -41,3 +41,4 @@ num-traits = { workspace = true }
 alloy-sol-types = { workspace = true }
 alloy-contract = { workspace = true }
 zeroize = { workspace = true }
+nori-contract-bindings = { workspace = true }
