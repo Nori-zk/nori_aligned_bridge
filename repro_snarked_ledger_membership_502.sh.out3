@@ -1,0 +1,134 @@
+PublicKey: B62qijFpfhMHqo4Lq1bP6YEwzH9NS2HmoC8DkKRQpWMrMykzL2EptBP
+Token:     x9K3DJhDGF23jJcQHyBosWWxWbaBU8ZZpmNVAN26imBBdB6TcT
+
+================================================================
+Node: https://api.minascan.io/node/devnet/v1/graphql
+================================================================
+
+--- Step 1: Get current chain tip ---
+{
+  "data": {
+    "bestChain": [
+      {
+        "stateHash": "3NLDFw17kmuMC1MbukYnEa1VodrZFZpXtDPzMKNW5voBoGvhwQPR",
+        "protocolState": {
+          "consensusState": {
+            "blockHeight": "505595"
+          }
+        }
+      }
+    ]
+  }
+}
+
+--- Step 2: Prove account exists in staged ledger ---
+{
+  "data": {
+    "account": {
+      "tokenId": "x9K3DJhDGF23jJcQHyBosWWxWbaBU8ZZpmNVAN26imBBdB6TcT",
+      "balance": {
+        "total": "186"
+      },
+      "nonce": "0"
+    }
+  }
+}
+
+--- Step 3: encodedSnarkedLedgerAccountMembership ---
+stateHash: 3NLDFw17kmuMC1MbukYnEa1VodrZFZpXtDPzMKNW5voBoGvhwQPR
+error code: 502
+HTTP_STATUS: 502
+BUG CONFIRMED on https://api.minascan.io/node/devnet/v1/graphql
+
+================================================================
+Node: https://mina-node.devnet.nori.it.com/graphql
+================================================================
+
+--- Step 1: Get current chain tip ---
+{
+  "data": {
+    "bestChain": [
+      {
+        "stateHash": "3NLDFw17kmuMC1MbukYnEa1VodrZFZpXtDPzMKNW5voBoGvhwQPR",
+        "protocolState": {
+          "consensusState": {
+            "blockHeight": "505595"
+          }
+        }
+      }
+    ]
+  }
+}
+
+--- Step 2: Prove account exists in staged ledger ---
+{
+  "data": {
+    "account": {
+      "tokenId": "x9K3DJhDGF23jJcQHyBosWWxWbaBU8ZZpmNVAN26imBBdB6TcT",
+      "balance": {
+        "total": "186"
+      },
+      "nonce": "0"
+    }
+  }
+}
+
+--- Step 3: encodedSnarkedLedgerAccountMembership ---
+stateHash: 3NLDFw17kmuMC1MbukYnEa1VodrZFZpXtDPzMKNW5voBoGvhwQPR
+<html>
+<head><title>502 Bad Gateway</title></head>
+<body>
+<center><h1>502 Bad Gateway</h1></center>
+<hr><center>nginx/1.29.6</center>
+</body>
+</html>
+
+HTTP_STATUS: 502
+BUG CONFIRMED on https://mina-node.devnet.nori.it.com/graphql
+
+================================================================
+Node: https://devnet-plain-1.gcp.o1test.net/graphql
+================================================================
+
+--- Step 1: Get current chain tip ---
+{
+  "data": {
+    "bestChain": [
+      {
+        "stateHash": "3NLDFw17kmuMC1MbukYnEa1VodrZFZpXtDPzMKNW5voBoGvhwQPR",
+        "protocolState": {
+          "consensusState": {
+            "blockHeight": "505595"
+          }
+        }
+      }
+    ]
+  }
+}
+
+--- Step 2: Prove account exists in staged ledger ---
+{
+  "data": {
+    "account": {
+      "tokenId": "x9K3DJhDGF23jJcQHyBosWWxWbaBU8ZZpmNVAN26imBBdB6TcT",
+      "balance": {
+        "total": "186"
+      },
+      "nonce": "0"
+    }
+  }
+}
+
+--- Step 3: encodedSnarkedLedgerAccountMembership ---
+stateHash: 3NLDFw17kmuMC1MbukYnEa1VodrZFZpXtDPzMKNW5voBoGvhwQPR
+<html>
+<head><title>502 Bad Gateway</title></head>
+<body>
+<center><h1>502 Bad Gateway</h1></center>
+<hr><center>nginx</center>
+</body>
+</html>
+
+HTTP_STATUS: 502
+BUG CONFIRMED on https://devnet-plain-1.gcp.o1test.net/graphql
+
