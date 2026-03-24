@@ -121,11 +121,15 @@ pub async fn get_mina_proof_of_state(
 ) -> Result<(MinaStateProof, MinaStatePubInputs), String> {
     let bridge_tip_state_hash = get_bridge_tip_hash(contract_addr, eth_rpc_url).await?.0;
     let (
-        candidate_chain_states,
+        candidate_chain_states_vec,
         candidate_chain_state_hashes,
         candidate_chain_ledger_hashes,
         candidate_tip_proof,
     ) = query_candidate_chain_0(rpc_url).await?;
+
+    let candidate_chain_states: [MinaStateProtocolStateValueStableV2; BRIDGE_TRANSITION_FRONTIER_LEN] =
+        candidate_chain_states_vec.try_into()
+            .map_err(|_| "Failed to convert chain states to fixed array".to_string())?;
 
     let candidate_tip_state_hash = candidate_chain_state_hashes
         .last()

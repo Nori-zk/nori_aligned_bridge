@@ -820,6 +820,9 @@ pub async fn less_insane_get_mina_proof_of_state(
     let candidate_tip_proof = proofs_vec.pop()
         .ok_or_else(|| MinaDaemonError::MalformedResponse("Empty proofs vec".into()))?;
     let group_finalization_state = states_vec[0].clone();
+    let candidate_chain_states: [MinaStateProtocolStateValueStableV2; BRIDGE_TRANSITION_FRONTIER_LEN] =
+        states_vec.try_into()
+            .map_err(|_| MinaDaemonError::MalformedResponse("Failed to convert chain states to fixed array".into()))?;
 
     let candidate_tip_state_hash = candidate_chain_state_hashes
         .last()
@@ -828,7 +831,7 @@ pub async fn less_insane_get_mina_proof_of_state(
 
     let mina_state_proof = MinaStateProof {
         candidate_tip_proof,
-        candidate_chain_states: states_vec,
+        candidate_chain_states,
         bridge_tip_state: group_finalization_state,
     };
     let mina_state_pub_inputs = MinaStatePubInputs {
@@ -960,7 +963,7 @@ pub async fn get_mina_proof_of_state(
     // Concurrency capped at 4 to avoid reqwest HTTP/2 multiplexing bug where the daemon
     // returns empty response bodies under high concurrency.
     let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(4));
-    let candidate_chain_states: Vec<MinaStateProtocolStateValueStableV2> = join_all(
+    let candidate_chain_states_vec: Vec<MinaStateProtocolStateValueStableV2> = join_all(
         candidate_chain_state_hashes
             .iter()
             .map(|state_hash| {
@@ -978,7 +981,10 @@ pub async fn get_mina_proof_of_state(
     .collect::<Result<Vec<_>, _>>()?;
 
     // F_g's protocol state is the first in the window -- no separate query needed.
-    let group_finalization_state = candidate_chain_states[0].clone();
+    let group_finalization_state = candidate_chain_states_vec[0].clone();
+    let candidate_chain_states: [MinaStateProtocolStateValueStableV2; BRIDGE_TRANSITION_FRONTIER_LEN] =
+        candidate_chain_states_vec.try_into()
+            .map_err(|_| MinaDaemonError::MalformedResponse("Failed to convert chain states to fixed array".into()))?;
 
     let candidate_tip_state_hash = candidate_chain_state_hashes
         .last()
