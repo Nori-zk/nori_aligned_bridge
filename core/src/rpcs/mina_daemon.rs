@@ -9,6 +9,7 @@ use std::env;
 
 use crate::error::Error;
 use crate::mina_daemon;
+use crate::mina_daemon::staged_account_query::StagedAccountQueryAccount;
 use crate::proof::account_proof::{MinaAccountProof, MinaAccountPubInputs};
 use crate::proof::state_proof::{MinaStatePubInputs, MinaStateProof};
 use super::errors::MinaDaemonError;
@@ -115,6 +116,19 @@ impl MinaDaemonRPC {
             token_id,
             state_hash,
             self.rpc_url.as_str(),
+        )
+        .await
+    }
+
+    pub async fn query_staged_account(
+        &self,
+        public_key: &str,
+        token_id: Option<&str>,
+    ) -> Result<StagedAccountQueryAccount, MinaDaemonError> {
+        mina_daemon::query_staged_account(
+            self.rpc_url.as_str(),
+            public_key,
+            token_id,
         )
         .await
     }

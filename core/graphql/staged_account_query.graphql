@@ -1,0 +1,57 @@
+query StagedAccountQuery($publicKey: PublicKey!, $token: TokenId) {
+  account(publicKey: $publicKey, token: $token) {
+    publicKey
+    tokenId
+    token
+    tokenSymbol
+    balance {
+      total
+      unknown
+      liquid
+      locked
+      blockHeight
+      stateHash
+    }
+    nonce
+    inferredNonce
+    receiptChainHash
+    delegate
+    votingFor
+    stakingActive
+    locked
+    index
+    zkappUri
+    zkappState
+    provedState
+    timing {
+      initialMinimumBalance
+      cliffTime
+      cliffAmount
+      vestingPeriod
+      vestingIncrement
+    }
+    permissions {
+      editState
+      send
+      receive
+      access
+      setDelegate
+      setPermissions
+      setVerificationKey {
+        auth
+        txnVersion
+      }
+      setZkappUri
+      editActionState
+      setTokenSymbol
+      incrementNonce
+      setVotingFor
+      setTiming
+    }
+    verificationKey {
+      verificationKey
+      hash
+    }
+    actionState
+  }
+}

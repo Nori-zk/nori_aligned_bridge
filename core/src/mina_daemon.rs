@@ -34,6 +34,7 @@ use mina_p2p_messages::{
     },
 };
 use mina_state_verifier::verify_mina_state;
+use num_traits::ToPrimitive;
 
 use crate::{
     proof::account_proof::{MerkleNode, MinaAccountProof, MinaAccountPubInputs},
@@ -55,6 +56,15 @@ type FieldElem = String;
 type Length = String;
 type TokenId = String;
 type PublicKey = String;
+type AccountNonce = String;
+type Action = String;
+type Amount = String;
+type Balance = String;
+type ChainHash = String;
+type GlobalSlotSpan = String;
+type Globalslot = String;
+type VerificationKey = String;
+type VerificationKeyHash = String;
 
 // --- GraphQL query definitions ---
 
@@ -100,6 +110,22 @@ struct BestChainQuery;
     query_path = "graphql/account_query.graphql"
 )]
 struct AccountQuery;
+
+/// Queries a single account from the staged ledger by public key and optional token.
+///
+/// GraphQL: `account(publicKey: $publicKey, token: $token)`
+///
+/// Returns all human-readable account fields (balance, nonce, permissions, timing,
+/// zkapp state, etc.) directly from the staged ledger. This is distinct from
+/// `encodedSnarkedLedgerAccountMembership` which returns the snarked ledger binprot
+/// blob and merkle path.
+#[derive(GraphQLQuery)]
+#[graphql(
+    schema_path = "graphql/mina_schema.json",
+    query_path = "graphql/staged_account_query.graphql",
+    response_derives = "Debug"
+)]
+pub struct StagedAccountQuery;
 
 /// Lightweight query for the state hash and block height of each block in the transition
 /// frontier.
@@ -447,6 +473,57 @@ fn format_zkapp_readable(zkapp: &MinaBaseZkappAccountStableV2) -> String {
     output
 }
 
+/// Queries a single account from the staged ledger by public key and optional token.
+/// Returns the full `staged_account_query::StagedAccountQueryAccount` response with all
+/// human-readable fields (balance, nonce, permissions, timing, zkapp state, etc.).
+///
+/// This is a diagnostic/test query -- it does NOT return a proof or binprot blob.
+pub async fn query_staged_account(
+    rpc_url: &str,
+    public_key: &str,
+    token_id: Option<&str>,
+) -> Result<staged_account_query::StagedAccountQueryAccount, MinaDaemonError> {
+    let client = reqwest::Client::new();
+
+    let variables = staged_account_query::Variables {
+        public_key: public_key.to_owned(),
+        token: token_id.map(|t| t.to_owned()),
+    };
+
+    let request_body = StagedAccountQuery::build_query(variables);
+    let response = client
+        .post(rpc_url)
+        .json(&request_body)
+        .send()
+        .await?;
+
+    let response_text = response.text().await.map_err(|e: reqwest::Error| {
+        if e.is_decode() {
+            MinaDaemonError::MalformedResponse(format!("failed to read response body: {e}"))
+        } else {
+            MinaDaemonError::RpcUnreachable(format!("failed to read response body: {e}"))
+        }
+    })?;
+    info!("Staged account raw response: {}", response_text);
+
+    let response: graphql_client::Response<staged_account_query::ResponseData> =
+        serde_json::from_str(&response_text).map_err(|e| {
+            MinaDaemonError::MalformedResponse(format!("Failed to parse JSON: {e}"))
+        })?;
+
+    if let Some(errors) = response.errors {
+        if !errors.is_empty() {
+            let msgs: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
+            return Err(MinaDaemonError::GraphQLError(msgs.join("; ")));
+        }
+    }
+
+    response
+        .data
+        .and_then(|d| d.account)
+        .ok_or_else(|| MinaDaemonError::AccountNotFound("account not found in staged ledger".into()))
+}
+
 /// Queries the account state, merkle proof, and ledger hash for a given account at a
 /// given block from the Mina daemon.
 ///
@@ -536,17 +613,20 @@ async fn query_account(
     let account = MinaAccount::binprot_read(&mut account_bytes.as_slice())
         .map_err(|err| MinaDaemonError::MalformedResponse(format!("Failed to deserialize account binprot: {err}")))?;
 
+    let token_symbol: Result<String, _> = (&account.token_symbol).try_into();
     info!("=== Decoded MinaAccount ===");
-    info!("Public Key: {:?}", account.public_key);
-    info!("Token ID: {:?}", account.token_id);
-    info!("Token Symbol: {:?}", account.token_symbol);
-    info!("Balance: {:?}", account.balance);
-    info!("Nonce: {:?}", account.nonce);
-    info!("Delegate: {:?}", account.delegate);
-    info!("Has zkApp: {}", account.zkapp.is_some());
+    info!("  public_key:         {}", account.public_key);
+    info!("  token_id:           0x{}", hex::encode(account.token_id.0.as_ref()));
+    info!("  token_symbol:       {}", token_symbol.unwrap_or_default());
+    info!("  balance:            {}", account.balance.to_u64().unwrap_or(0));
+    info!("  nonce:              {}", account.nonce.to_u32().unwrap_or(0));
+    info!("  receipt_chain_hash: 0x{}", hex::encode(account.receipt_chain_hash.0.as_ref()));
+    info!("  delegate:           {}", account.delegate.as_ref().map(|d| d.to_string()).unwrap_or_else(|| "None".to_string()));
+    info!("  voting_for:         0x{}", hex::encode(account.voting_for.0.as_ref()));
+    info!("  timing:             {:?}", account.timing);
+    info!("  has_zkapp:          {}", account.zkapp.is_some());
     if let Some(ref zkapp) = account.zkapp {
-        info!("=== zkApp Details (Human Readable) ===\n{}", format_zkapp_readable(zkapp));
-        info!("=== End zkApp Details ===");
+        info!("  zkapp:\n{}", format_zkapp_readable(zkapp));
     }
     info!("=== End of MinaAccount ===");
 
