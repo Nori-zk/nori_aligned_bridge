@@ -18,8 +18,8 @@ set -euo pipefail
 
 DAEMON="https://devnet-plain-1.gcp.o1test.net/graphql"
 ARCHIVE="https://devnet-archive-node-api.gcp.o1test.net/"
-PUBLIC_KEY="B62qijFpfhMHqo4Lq1bP6YEwzH9NS2HmoC8DkKRQpWMrMykzL2EptBP"
-CONTRACT="B62qr6NqtKgEjWLUjUc8NpbUyUG3dbshVfayKtRChHWCzZyJAkuy26P"
+PUBLIC_KEY="B62qrpX8gianx6Yifq2r2F1UvX175917h5i2tgvsPwHz5KEcxnFpy8f" # ADMIN
+CONTRACT="B62qpLUxa2RuHYFNXHbuFgZMxCWp4kSNQE8prNXeazZD1dzFiYYHvJi" # TOKEN
 
 echo "Account:  $PUBLIC_KEY"
 echo "Contract: $CONTRACT"

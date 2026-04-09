@@ -20,8 +20,8 @@ NODES=(
   "https://mina-node.devnet.nori.it.com/graphql"
   "https://devnet-plain-1.gcp.o1test.net/graphql"
 )
-PUBLIC_KEY="B62qijFpfhMHqo4Lq1bP6YEwzH9NS2HmoC8DkKRQpWMrMykzL2EptBP"
-TOKEN="x9K3DJhDGF23jJcQHyBosWWxWbaBU8ZZpmNVAN26imBBdB6TcT"
+PUBLIC_KEY="B62qrpX8gianx6Yifq2r2F1UvX175917h5i2tgvsPwHz5KEcxnFpy8f"
+TOKEN="x46WDgG2zDwsVzWmYJ3jb1PBjRvawvirVjxUFdaADnYz2xhuAi" # cargo run --bin token_id_to_base58 -- 1676738181413133854148376313277099836893922609484575143243904052352543641682
 
 echo "PublicKey: $PUBLIC_KEY"
 echo "Token:     $TOKEN"

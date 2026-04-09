@@ -32,17 +32,21 @@ pub struct ZkAppEvent {
     pub fields: Vec<String>,
 }
 
-/// Parsed payload of a FungibleToken Burn event.
+/// Parsed payload of a NoriTokenBridge Burn event.
 ///
-/// Corresponds to `BurnEvent { from: PublicKey, amount: UInt64 }` in o1js.
-/// The raw x-coordinate and is-odd parity fields are parsed and encoded into
-/// `from` at construction time; callers receive a ready-to-use address.
+/// Corresponds to `BurnEvent { from: PublicKey, amount: UInt64, burnedSoFar: UInt64,
+/// receiverEth: Field }` in o1js. Fields are serialized in declaration order, with
+/// PublicKey expanded to (x-coordinate, is-odd parity).
 pub struct BurnEventPayload {
     /// Base58Check-encoded Mina public key of the burning account (o1js field: `from`).
-    /// Reconstructed from data[1] (x-coordinate) and data[2] (is-odd parity).
+    /// Reconstructed from fields[0] (x-coordinate) and fields[1] (is-odd parity).
     pub from: MinaPubKeyBase58,
-    /// data[3]: amount burned (UInt64 as decimal string).
+    /// fields[2]: amount burned (UInt64 as decimal string).
     pub amount: String,
+    /// fields[3]: cumulative amount burned by this account (UInt64 as decimal string).
+    pub burned_so_far: String,
+    /// fields[4]: Ethereum receiver address (Field as decimal string).
+    pub receiver_eth: String,
 }
 
 /// A fully parsed Burn event with block context.
@@ -130,13 +134,13 @@ pub async fn query_canonical_block_at_height(
     Ok(blocks.into_iter().flatten().next().map(|b| b.state_hash))
 }
 
-/// Alphabetical index of "Burn" among the FungibleToken contract's event names:
-/// { BalanceChange=0, Burn=1, Mint=2, Pause=3, SetAdmin=4 }.
-const BURN_EVENT_TYPE: &str = "1";
+/// Alphabetical index of "Burn" among the NoriTokenBridge contract's event names:
+/// { Burn=0 }.
+const BURN_EVENT_TYPE: &str = "0";
 
 /// Fetches and parses Burn events emitted at `contract_addr` from `from_height` onwards.
 ///
-/// Calls [`detect_zk_app_events`], filters for events with type tag `1` (Burn), and parses
+/// Calls [`detect_zk_app_events`], filters for events with type tag `0` (Burn), and parses
 /// the payload fields into a [`BurnEvent`].
 pub async fn detect_nori_burn(
     rpc_url: &str,
@@ -149,9 +153,9 @@ pub async fn detect_nori_burn(
         if event.event_type != BURN_EVENT_TYPE {
             continue;
         }
-        if event.fields.len() < 3 {
+        if event.fields.len() < 5 {
             return Err(MinaArchiveError::MalformedResponse(format!(
-                "Burn event at block {} has {} payload fields, expected 3",
+                "Burn event at block {} has {} payload fields, expected 5",
                 event.block_height,
                 event.fields.len()
             )));
@@ -170,6 +174,8 @@ pub async fn detect_nori_burn(
             payload: BurnEventPayload {
                 from: MinaCompressedPubKey { x: pub_x, is_odd: pub_x_is_odd }.into(),
                 amount: event.fields[2].clone(),
+                burned_so_far: event.fields[3].clone(),
+                receiver_eth: event.fields[4].clone(),
             },
         });
     }
