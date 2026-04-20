@@ -669,6 +669,21 @@ impl fmt::Display for EthError {
 
 impl std::error::Error for EthError {}
 
+impl EthError {
+    /// Returns `true` for errors that are transient and worth retrying with backoff.
+    /// Returns `false` for permanent failures where retrying would waste gas or indicate
+    /// a code/config bug.
+    pub fn is_retryable(&self) -> bool {
+        matches!(
+            self,
+            EthError::RpcUnreachable(_)
+                | EthError::NonceCollision(_)
+                | EthError::UnexpectedRpcResponse(_)
+                | EthError::GasSafetyLimit(_)
+        )
+    }
+}
+
 // AccountIsNotValid is defined in MinaStateSettlementExample.sol but absent from
 // the ABI JSON (used internally via cross-contract call). Define it here so
 // alloy::sol! generates a type with the correct selector for revert decoding.

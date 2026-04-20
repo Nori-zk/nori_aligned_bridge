@@ -284,6 +284,44 @@ pub async fn get_chain_state_hashes(
         .map_err(|_| EthError::SerializationError("wrong number of state hashes from contract".into()))
 }
 
+/// Decodes `encoded_account` (ABI-encoded `MinaAccountValidationExample::Account`) and
+/// computes the `burnSoFarSet` mapping key used in `NoriTokenBridge.sol`:
+/// `uint256(keccak256(abi.encode(account.publicKey, account.tokenIdKeyHash)))`.
+pub fn compute_pub_key_token_id_hash(encoded_account: &[u8]) -> Result<U256, EthError> {
+    use alloy::sol_types::SolValue;
+    let account = MinaAccountValidationExample::Account::abi_decode(encoded_account)
+        .map_err(|e| EthError::SerializationError(format!("failed to ABI-decode encoded_account: {e}")))?;
+    let key_bytes = (account.publicKey, account.tokenIdKeyHash).abi_encode();
+    let hash = alloy::primitives::keccak256(&key_bytes);
+    Ok(U256::from_be_bytes(hash.0))
+}
+
+/// Decodes `encoded_account` and extracts `zkapp.appState[2]` as a big-endian `U256`.
+/// `appState[2]` stores the cumulative burn amount recorded by the Mina zkapp.
+pub fn extract_mina_burn_so_far(encoded_account: &[u8]) -> Result<U256, EthError> {
+    use alloy::sol_types::SolValue;
+    let account = MinaAccountValidationExample::Account::abi_decode(encoded_account)
+        .map_err(|e| EthError::SerializationError(format!("failed to ABI-decode encoded_account: {e}")))?;
+    Ok(U256::from_be_bytes(account.zkapp.appState[2].0))
+}
+
+/// Reads `burnSoFarSet[pubKeyTokenIdHash]` from `NoriTokenBridge.sol`.
+/// Pure view call — no wallet needed.
+pub async fn get_burn_so_far(
+    pub_key_token_id_hash: U256,
+    eth_rpc_url: &Url,
+    nori_token_bridge_addr: Address,
+) -> Result<U256, EthError> {
+    let provider = ProviderBuilder::new().connect_http(eth_rpc_url.clone());
+    let contract = NoriTokenBridge::new(nori_token_bridge_addr, provider);
+    let result = contract
+        .burnSoFarSet(pub_key_token_id_hash)
+        .call()
+        .await
+        .map_err(classify_contract_call_error)?;
+    Ok(result)
+}
+
 /// Checks a mined receipt for success or failure.
 ///
 /// Call this after `get_tx_receipt` returns `Some(receipt)`.

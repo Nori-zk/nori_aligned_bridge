@@ -102,6 +102,17 @@ impl EthRPC {
         eth_2::get_tx_receipt(&self.eth_rpc_url, tx_hash).await
     }
 
+    /// Reads `burnSoFarSet[pubKeyTokenIdHash]` from `NoriTokenBridge.sol`.
+    /// Pure view call — no wallet needed.
+    pub async fn get_burn_so_far(&self, pub_key_token_id_hash: U256) -> Result<U256, EthError> {
+        eth_2::get_burn_so_far(
+            pub_key_token_id_hash,
+            &self.eth_rpc_url,
+            self.nori_token_bridge_address,
+        )
+        .await
+    }
+
     /// Reads the chain state hashes from `MinaStateSettlement.sol`.
     pub async fn get_chain_state_hashes(
         &self,
