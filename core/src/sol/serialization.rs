@@ -15,11 +15,7 @@ impl serde_with::SerializeAs<StateHash> for SolSerialize {
     where
         S: serde::Serializer,
     {
-        let bytes: [u8; 32] = val
-            .0
-            .as_ref()
-            .try_into()
-            .map_err(serde::ser::Error::custom)?;
+        let bytes: [u8; 32] = val.to_bytes();
         bytes.serialize(serializer)
     }
 }
@@ -30,7 +26,7 @@ impl<'de> serde_with::DeserializeAs<'de, StateHash> for SolSerialize {
         D: serde::Deserializer<'de>,
     {
         let bytes = <[u8; 32]>::deserialize(deserializer)?;
-        let bigint = bigint::BigInt::new(bytes.into());
+        let bigint = bigint::BigInt::from_bytes(bytes);
         Ok(StateHash::from(DataHashLibStateHashStableV1(bigint)))
     }
 }
@@ -40,11 +36,7 @@ impl serde_with::SerializeAs<LedgerHash> for SolSerialize {
     where
         S: serde::Serializer,
     {
-        let bytes: [u8; 32] = val
-            .0
-            .as_ref()
-            .try_into()
-            .map_err(serde::ser::Error::custom)?;
+        let bytes: [u8; 32] = val.to_bytes();
         bytes.serialize(serializer)
     }
 }
@@ -55,7 +47,7 @@ impl<'de> serde_with::DeserializeAs<'de, LedgerHash> for SolSerialize {
         D: serde::Deserializer<'de>,
     {
         let bytes = <[u8; 32]>::deserialize(deserializer)?;
-        let bigint = bigint::BigInt::new(bytes.into());
+        let bigint = bigint::BigInt::from_bytes(bytes);
         Ok(LedgerHash::from(MinaBaseLedgerHash0StableV1(bigint)))
     }
 }
@@ -66,7 +58,7 @@ impl serde_with::SerializeAs<Fp> for SolSerialize {
         S: serde::Serializer,
     {
         let mut bytes = Vec::with_capacity(32);
-        val.serialize(&mut bytes)
+        val.serialize_compressed(&mut bytes)
             .map_err(serde::ser::Error::custom)?;
         let bytes: [u8; 32] = bytes.try_into().map_err(|_| {
             serde::ser::Error::custom("failed to convert byte vector into 32 byte array")
@@ -81,6 +73,6 @@ impl<'de> serde_with::DeserializeAs<'de, Fp> for SolSerialize {
         D: serde::Deserializer<'de>,
     {
         let bytes = <[u8; 32]>::deserialize(deserializer)?;
-        Fp::deserialize(&mut &bytes[..]).map_err(serde::de::Error::custom)
+        Fp::deserialize_compressed(&mut &bytes[..]).map_err(serde::de::Error::custom)
     }
 }

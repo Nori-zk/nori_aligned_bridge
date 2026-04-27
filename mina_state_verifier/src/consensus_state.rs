@@ -152,12 +152,15 @@ fn hash_last_vrf(chain: &MinaProtocolState) -> String {
 }
 
 fn hash_state(chain: &MinaProtocolState) -> String {
-    MinaHash::hash(chain).to_hex()
+    match MinaHash::try_hash(chain) {
+        Ok(fp) => fp.to_hex(),
+        Err(_) => String::from("invalid"),
+    }
 }
 
 #[cfg(test)]
 mod test {
-    use ark_ff::Fp256;
+    use mina_curves::pasta::Fp;
     use proof::state_proof::MinaStateProof;
     use mina_p2p_messages::{
         bigint::BigInt,
@@ -167,6 +170,8 @@ mod test {
             UnsignedExtendedUInt32StableV1,
         },
     };
+
+    use crate::proof;
 
     use super::*;
 
@@ -218,7 +223,7 @@ mod test {
                 .lock_checkpoint
                 .to_fp()
                 .unwrap()
-                - Fp256::from(1),
+                - Fp::from(1),
         ))
         .into();
         old_tip.body.consensus_state.sub_window_densities.pop_back();
@@ -272,7 +277,7 @@ mod test {
                 .lock_checkpoint
                 .to_fp()
                 .unwrap()
-                - Fp256::from(1),
+                - Fp::from(1),
         ))
         .into();
         old_tip.body.consensus_state.sub_window_densities.pop_back();

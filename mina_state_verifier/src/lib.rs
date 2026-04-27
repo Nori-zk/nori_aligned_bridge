@@ -10,26 +10,31 @@ mod utils;
 use log::{error, info};
 use proof::state_proof::{MinaStateProof, MinaStatePubInputs};
 
-use ark_ec::short_weierstrass_jacobian::GroupAffine;
 use consensus_state::{select_secure_chain, ChainResult};
-use kimchi::mina_curves::pasta::{Fp, PallasParameters};
+use kimchi::mina_curves::pasta::{Fp, Pallas, PallasParameters};
 use kimchi::verifier_index::VerifierIndex;
 use lazy_static::lazy_static;
 use mina_curves::pasta::{Fq, Vesta};
+use mina_p2p_messages::bigint::InvalidBigInt;
 use mina_p2p_messages::hash::MinaHash;
-use mina_p2p_messages::v2::{MinaStateProtocolStateValueStableV2, StateHash};
+use mina_p2p_messages::v2::{
+    DataHashLibStateHashStableV1, MinaBlockHeaderStableV2,
+    MinaStateProtocolStateValueStableV2, ProtocolVersionStableV2, StateHash,
+};
+use mina_poseidon::pasta::FULL_ROUNDS;
 use mina_tree::proofs::field::FieldWitness as _;
 use mina_tree::proofs::verification::verify_block;
-use poly_commitment::srs::SRS;
+use poly_commitment::ipa::SRS;
+use poly_commitment::SRS as SRSTrait;
 use verifier_index::{deserialize_blockchain_vk, MinaChain};
 
 lazy_static! {
-    static ref DEVNET_VERIFIER_INDEX: VerifierIndex<GroupAffine<PallasParameters>> =
+    static ref DEVNET_VERIFIER_INDEX: VerifierIndex<FULL_ROUNDS, Pallas, SRS<Pallas>> =
         deserialize_blockchain_vk(MinaChain::Devnet).unwrap_or_else(|err| {
             error!("Failed to load Devnet verification key: {}", err);
             std::process::exit(1);
         });
-    static ref MAINNET_VERIFIER_INDEX: VerifierIndex<GroupAffine<PallasParameters>> =
+    static ref MAINNET_VERIFIER_INDEX: VerifierIndex<FULL_ROUNDS, Pallas, SRS<Pallas>> =
         deserialize_blockchain_vk(MinaChain::Mainnet).unwrap_or_else(|err| {
             error!("Failed to load Mainnet verification key: {}", err);
             std::process::exit(1);
@@ -124,20 +129,28 @@ pub fn verify_mina_state(proof_bytes: &[u8], pub_input_bytes: &[u8]) -> bool {
 
     // Verify the tip block (and thanks to Pickles recursion all the previous states are verified
     // as well)
+    let candidate_tip_state = proof
+        .candidate_chain_states
+        .last()
+        .expect("candidate_chain_states is non-empty");
+    let header = MinaBlockHeaderStableV2 {
+        protocol_state: candidate_tip_state.clone(),
+        protocol_state_proof: std::sync::Arc::new(proof.candidate_tip_proof),
+        delta_block_chain_proof: (
+            StateHash::from(DataHashLibStateHashStableV1(mina_p2p_messages::bigint::BigInt::zero())),
+            mina_p2p_messages::list::List::new(),
+        ),
+        current_protocol_version: ProtocolVersionStableV2 {
+            transaction: (&0u64).into(),
+            network: (&0u64).into(),
+            patch: (&0u64).into(),
+        },
+        proposed_protocol_version_opt: None,
+    };
     if pub_inputs.is_state_proof_from_devnet {
-        verify_block(
-            &proof.candidate_tip_proof,
-            candidate_tip_state_hash,
-            &DEVNET_VERIFIER_INDEX,
-            &MINA_SRS,
-        )
+        verify_block(&header, &DEVNET_VERIFIER_INDEX, &MINA_SRS)
     } else {
-        verify_block(
-            &proof.candidate_tip_proof,
-            candidate_tip_state_hash,
-            &MAINNET_VERIFIER_INDEX,
-            &MINA_SRS,
-        )
+        verify_block(&header, &MAINNET_VERIFIER_INDEX, &MINA_SRS)
     }
 }
 
@@ -154,11 +167,12 @@ fn check_pub_inputs(
     ),
     String,
 > {
-    let candidate_root_state_hash = proof
+    let candidate_root_state_hash: StateHash = proof
         .candidate_chain_states
         .first()
-        .map(|state| state.hash())
-        .ok_or("failed to retrieve root state hash".to_string())?;
+        .ok_or("failed to retrieve root state".to_string())?
+        .try_hash()
+        .map_err(|e| format!("failed to hash root state: {e}"))?;
     // Reconstructs the state hashes if the states form a chain, and compares them to the public
     // input state hashes. Does not compare the tip state hash.
     let mut state_hash = candidate_root_state_hash;
@@ -166,10 +180,12 @@ fn check_pub_inputs(
         .candidate_chain_states
         .iter()
         .skip(1)
-        .map(|state| state.body.hash())
+        .map(|state| state.body.try_hash())
         .zip(pub_inputs.candidate_chain_state_hashes.iter())
     {
-        let curr_state_hash = StateHash::from_hashes(&state_hash, &body_hash);
+        let body_hash = body_hash.map_err(|e| format!("failed to hash body: {e}"))?;
+        let curr_state_hash = StateHash::try_from_hashes(&state_hash, &body_hash)
+            .map_err(|e| format!("failed to compute state hash from hashes: {e}"))?;
         let prev_state_hash = std::mem::replace(&mut state_hash, curr_state_hash);
 
         // Check if all hashes (but the last one) in the public input are correct
@@ -209,12 +225,14 @@ fn check_pub_inputs(
     }
 
     // Validate the public input bridge's tip state hash
-    let bridge_tip_state_hash = pub_inputs
+    let bridge_tip_state_hash: Fp = pub_inputs
         .bridge_tip_state_hash
-        .to_fp()
+        .to_field()
         .map_err(|err| format!("Can't parse bridge tip state hash to fp: {err}"))?;
 
-    if MinaHash::hash(&proof.bridge_tip_state) != bridge_tip_state_hash {
+    let computed_hash: Fp = MinaHash::try_hash(&proof.bridge_tip_state)
+        .map_err(|err| format!("Failed to hash bridge tip state: {err}"))?;
+    if computed_hash != bridge_tip_state_hash {
         return Err(
             "the candidate's chain tip state doesn't match the hash provided as public input"
                 .to_string(),
@@ -233,7 +251,7 @@ fn check_pub_inputs(
         .last()
         .ok_or("failed to get candidate tip hash from public inputs".to_string())
         .and_then(|hash| {
-            hash.to_fp()
+            hash.to_field::<Fp>()
                 .map_err(|err| format!("failed to convert tip state hash to field element: {err}"))
         })?;
 

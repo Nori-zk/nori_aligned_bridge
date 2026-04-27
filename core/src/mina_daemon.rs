@@ -24,6 +24,7 @@ use base64::prelude::*;
 use futures::future::join_all;
 use graphql_client::{reqwest::post_graphql, GraphQLQuery};
 use kimchi::mina_curves::pasta::Fp;
+use ark_ff::BigInteger as _;
 use log::info;
 use mina_p2p_messages::{
     binprot::BinProtRead,
@@ -444,7 +445,7 @@ fn format_zkapp_readable(zkapp: &MinaBaseZkappAccountStableV2) -> String {
     // app_state - 8 field elements
     output.push_str("  app_state:\n");
     for (i, state) in zkapp.app_state.0.0.iter().enumerate() {
-        output.push_str(&format!("    [{}]: 0x{}\n", i, hex::encode(state.as_ref())));
+        output.push_str(&format!("    [{}]: 0x{}\n", i, hex::encode(state.as_ref().to_bytes_be())));
     }
 
     // verification_key
@@ -457,7 +458,7 @@ fn format_zkapp_readable(zkapp: &MinaBaseZkappAccountStableV2) -> String {
     // action_state - 5 field elements
     output.push_str("  action_state:\n");
     for (i, state) in zkapp.action_state.iter().enumerate() {
-        output.push_str(&format!("    [{}]: 0x{}\n", i, hex::encode(state.as_ref())));
+        output.push_str(&format!("    [{}]: 0x{}\n", i, hex::encode(state.as_ref().to_bytes_be())));
     }
 
     // last_action_slot
@@ -616,13 +617,13 @@ async fn query_account(
     let token_symbol: Result<String, _> = (&account.token_symbol).try_into();
     info!("=== Decoded MinaAccount ===");
     info!("  public_key:         {}", account.public_key);
-    info!("  token_id:           0x{}", hex::encode(account.token_id.0.as_ref()));
+    info!("  token_id:           0x{}", hex::encode(account.token_id.0.as_ref().to_bytes_be()));
     info!("  token_symbol:       {}", token_symbol.unwrap_or_default());
     info!("  balance:            {}", account.balance.to_u64().unwrap_or(0));
     info!("  nonce:              {}", account.nonce.to_u32().unwrap_or(0));
-    info!("  receipt_chain_hash: 0x{}", hex::encode(account.receipt_chain_hash.0.as_ref()));
+    info!("  receipt_chain_hash: 0x{}", hex::encode(account.receipt_chain_hash.0.as_ref().to_bytes_be()));
     info!("  delegate:           {}", account.delegate.as_ref().map(|d| d.to_string()).unwrap_or_else(|| "None".to_string()));
-    info!("  voting_for:         0x{}", hex::encode(account.voting_for.0.as_ref()));
+    info!("  voting_for:         0x{}", hex::encode(account.voting_for.0.as_ref().to_bytes_be()));
     info!("  timing:             {:?}", account.timing);
     info!("  has_zkapp:          {}", account.zkapp.is_some());
     if let Some(ref zkapp) = account.zkapp {
@@ -635,7 +636,7 @@ async fn query_account(
         .protocol_state
         .blockchain_state
         .snarked_ledger_hash
-        .to_fp()
+        .0.to_field::<Fp>()
         .map_err(|_| MinaDaemonError::MalformedResponse("Failed to convert snarked_ledger_hash to field element".into()))?;
 
     let merkle_path = membership

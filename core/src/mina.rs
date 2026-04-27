@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use alloy_sol_types::SolValue;
+use ark_ff::BigInteger as _;
 use hex;
 use base64::prelude::*;
 use futures::future::join_all;
@@ -73,7 +74,7 @@ fn format_zkapp_readable(zkapp: &MinaBaseZkappAccountStableV2) -> String {
     // app_state - 8 个 field elements
     output.push_str("  app_state:\n");
     for (i, state) in zkapp.app_state.0.0.iter().enumerate() {
-        output.push_str(&format!("    [{}]: 0x{}\n", i, hex::encode(state.as_ref())));
+        output.push_str(&format!("    [{}]: 0x{}\n", i, hex::encode(state.as_ref().to_bytes_be())));
     }
     
     // verification_key
@@ -86,7 +87,7 @@ fn format_zkapp_readable(zkapp: &MinaBaseZkappAccountStableV2) -> String {
     // action_state - 5 个 field elements
     output.push_str("  action_state:\n");
     for (i, state) in zkapp.action_state.iter().enumerate() {
-        output.push_str(&format!("    [{}]: 0x{}\n", i, hex::encode(state.as_ref())));
+        output.push_str(&format!("    [{}]: 0x{}\n", i, hex::encode(state.as_ref().to_bytes_be())));
     }
     
     // last_action_slot
@@ -462,7 +463,7 @@ async fn query_account(
         .protocol_state
         .blockchain_state
         .snarked_ledger_hash
-        .to_fp()
+        .0.to_field::<Fp>()
         .unwrap();
 
     let merkle_path = membership

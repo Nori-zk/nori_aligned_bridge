@@ -2,7 +2,7 @@ use std::{array, sync::Arc};
 
 use ark_ff::{Field, PrimeField};
 use ark_poly::{
-    univariate::DensePolynomial, EvaluationDomain, Radix2EvaluationDomain, UVPolynomial,
+    univariate::DensePolynomial, EvaluationDomain, Radix2EvaluationDomain, DenseUVPolynomial,
 };
 use kimchi::{
     circuits::{
@@ -12,9 +12,10 @@ use kimchi::{
     },
     linearization::expr_linearization,
     mina_curves::pasta::{Fp, Fq, Pallas, Vesta},
-    poly_commitment::{srs::SRS, PolyComm},
     verifier_index::VerifierIndex,
 };
+use mina_poseidon::pasta::FULL_ROUNDS;
+use poly_commitment::{ipa::SRS, PolyComm, SRS as SRSTrait};
 use serde::Deserialize;
 
 const DEVNET_VK_JSON: &str = include_str!("devnet_vk.json");
@@ -91,7 +92,7 @@ impl TryInto<Pallas> for JSONGroupAffine {
 
     fn try_into(self) -> Result<Pallas, Self::Error> {
         // FIXME(xqft): handle point at infinity
-        Ok(Pallas::new(self.0.try_into()?, self.1.try_into()?, false))
+        Ok(Pallas::new_unchecked(self.0.try_into()?, self.1.try_into()?))
     }
 }
 
@@ -100,13 +101,12 @@ impl TryInto<PolyComm<Pallas>> for JSONPolyComm {
 
     fn try_into(self) -> Result<PolyComm<Pallas>, Self::Error> {
         Ok(PolyComm {
-            unshifted: vec![self.0.try_into()?],
-            shifted: None,
+            chunks: vec![self.0.try_into()?],
         })
     }
 }
 
-pub fn deserialize_blockchain_vk(chain: MinaChain) -> Result<VerifierIndex<Pallas>, String> {
+pub fn deserialize_blockchain_vk(chain: MinaChain) -> Result<VerifierIndex<FULL_ROUNDS, Pallas, SRS<Pallas>>, String> {
     let vk_json = match chain {
         MinaChain::Devnet => DEVNET_VK_JSON,
         MinaChain::Mainnet => MAINNET_VK_JSON,
@@ -128,7 +128,7 @@ pub fn deserialize_blockchain_vk(chain: MinaChain) -> Result<VerifierIndex<Palla
         emul_comm,
         endomul_scalar_comm,
     } = vk.commitments;
-    let empty_poly_comm = |_| PolyComm::new(Vec::new(), None);
+    let empty_poly_comm = |_| PolyComm { chunks: Vec::new() };
 
     let sigma_comm = {
         let mut new_sigma_comm = array::from_fn(empty_poly_comm);
@@ -166,7 +166,7 @@ pub fn deserialize_blockchain_vk(chain: MinaChain) -> Result<VerifierIndex<Palla
     // The code below was taken from OpenMina
     // https://github.com/openmina/openmina/blob/main/ledger/src/proofs/verifier_index.rs#L151
 
-    let (endo, _) = poly_commitment::srs::endos::<Vesta>();
+    let (endo, _) = poly_commitment::ipa::endos::<Vesta>();
 
     let feature_flags = FeatureFlags {
         range_check0: false,
@@ -203,7 +203,7 @@ pub fn deserialize_blockchain_vk(chain: MinaChain) -> Result<VerifierIndex<Palla
     // https://github.com/o1-labs/proof-systems/blob/2702b09063c7a48131173d78b6cf9408674fd67e/kimchi/src/verifier_index.rs#L310-L314
     let srs = {
         let mut srs = SRS::create(max_poly_size);
-        srs.add_lagrange_basis(domain);
+        srs.get_lagrange_basis(domain);
         Arc::new(srs)
     };
 
@@ -216,7 +216,8 @@ pub fn deserialize_blockchain_vk(chain: MinaChain) -> Result<VerifierIndex<Palla
     Ok(VerifierIndex {
         domain,
         max_poly_size: vk.index.max_poly_size,
-        srs: once_cell::sync::OnceCell::from(srs),
+        zk_rows: 3,
+        srs,
         public: vk.index.public,
         prev_challenges: vk.index.prev_challenges,
 
@@ -237,7 +238,7 @@ pub fn deserialize_blockchain_vk(chain: MinaChain) -> Result<VerifierIndex<Palla
         rot_comm: None,
 
         shift,
-        zkpm: once_cell::sync::OnceCell::from(zkpm),
+        permutation_vanishing_polynomial_m: once_cell::sync::OnceCell::from(zkpm),
         w: once_cell::sync::OnceCell::from(w),
         endo,
         lookup_index: None,

@@ -4,6 +4,7 @@ use alloy::{
     primitives::{Bytes, FixedBytes},
     sol_types::sol,
 };
+use ark_ff::BigInteger as _;
 use mina_p2p_messages::{
     bigint::BigInt,
     v2::{
@@ -13,6 +14,12 @@ use mina_p2p_messages::{
         PicklesBaseProofsVerifiedStableV1,
     },
 };
+
+/// Convert a mina-p2p-messages BigInt to a big-endian 32-byte array
+/// suitable for FixedBytes<32> conversion.
+fn bigint_to_be_bytes(b: &BigInt) -> Vec<u8> {
+    b.as_ref().to_bytes_be()
+}
 use num_traits::ToPrimitive;
 use MinaAccountValidationExample::*;
 
@@ -41,11 +48,11 @@ impl TryFrom<&MinaAccount> for Account {
         } = value;
 
         let publicKey = CompressedECPoint {
-            x: FixedBytes::try_from(public_key.x.as_ref())
+            x: FixedBytes::try_from(&bigint_to_be_bytes(&public_key.x)[..])
                 .map_err(|err| format!("Could not convert public key x to FixedBytes: {err}"))?,
             isOdd: public_key.is_odd,
         };
-        let tokenIdKeyHash = FixedBytes::try_from(token_id.0.as_ref())
+        let tokenIdKeyHash = FixedBytes::try_from(&bigint_to_be_bytes(&token_id.0)[..])
             .map_err(|err| format!("Could not convert token id to FixedBytes: {err}"))?;
 
         let tokenSymbol: String = token_symbol
@@ -53,11 +60,11 @@ impl TryFrom<&MinaAccount> for Account {
             .map_err(|err| format!("Failed to convert token symbol to string: {err}"))?;
         let balance = balance.to_u64().ok_or("Failed to convert balance to u64")?;
         let nonce = nonce.to_u32().ok_or("Failed to convert nonce to u64")?;
-        let receiptChainHash = FixedBytes::try_from(receipt_chain_hash.0.as_ref())
+        let receiptChainHash = FixedBytes::try_from(&bigint_to_be_bytes(&receipt_chain_hash.0)[..])
             .map_err(|err| format!("Could not convert token id to FixedBytes: {err}"))?;
         let delegate = if let Some(delegate) = delegate {
             CompressedECPoint {
-                x: FixedBytes::try_from(delegate.x.as_ref())
+                x: FixedBytes::try_from(&bigint_to_be_bytes(&delegate.x)[..])
                     .map_err(|err| format!("Could not delegate x to FixedBytes: {err}"))?,
                 isOdd: delegate.is_odd,
             }
@@ -67,7 +74,7 @@ impl TryFrom<&MinaAccount> for Account {
                 isOdd: true,
             }
         };
-        let votingFor = FixedBytes::try_from(voting_for.0.as_ref())
+        let votingFor = FixedBytes::try_from(&bigint_to_be_bytes(&voting_for.0)[..])
             .map_err(|err| format!("Could not convert voting_for to FixedBytes: {err}"))?;
 
         let timing = match timing {
@@ -145,7 +152,7 @@ impl TryFrom<&MinaAccount> for Account {
         let zkapp = if let Some(zkapp) = zkapp {
             let mut appState: [FixedBytes<32>; 8] = [FixedBytes::ZERO; 8];
             for (state, new_state) in zip(zkapp.app_state.0 .0.clone(), appState.iter_mut()) {
-                *new_state = FixedBytes::try_from(state.as_ref())
+                *new_state = FixedBytes::try_from(&bigint_to_be_bytes(&state)[..])
                     .map_err(|err| format!("Could not convert app state to FixedBytes: {err}"))?;
             }
             let verificationKey = if let Some(verification_key) = zkapp.verification_key.clone() {
@@ -158,10 +165,10 @@ impl TryFrom<&MinaAccount> for Account {
                 let mina_to_sol_commitment =
                     |comm: (BigInt, BigInt)| -> Result<Commitment, String> {
                         Ok(Commitment {
-                            x: FixedBytes::try_from(comm.0.as_ref()).map_err(|err| {
+                            x: FixedBytes::try_from(&bigint_to_be_bytes(&comm.0)[..]).map_err(|err| {
                                 format!("Could not convert commitment x to FixedBytes: {err}")
                             })?,
-                            y: FixedBytes::try_from(comm.1.as_ref()).map_err(|err| {
+                            y: FixedBytes::try_from(&bigint_to_be_bytes(&comm.1)[..]).map_err(|err| {
                                 format!("Could not convert commitment y to FixedBytes: {err}")
                             })?,
                         })
@@ -237,7 +244,7 @@ impl TryFrom<&MinaAccount> for Account {
             };
             let mut actionState: [FixedBytes<32>; 5] = [FixedBytes::ZERO; 5];
             for (state, new_state) in zip(zkapp.action_state.iter(), actionState.iter_mut()) {
-                *new_state = FixedBytes::try_from(state.as_ref()).map_err(|err| {
+                *new_state = FixedBytes::try_from(&bigint_to_be_bytes(state)[..]).map_err(|err| {
                     format!("Could not convert action state to FixedBytes: {err}")
                 })?;
             }
@@ -257,7 +264,7 @@ impl TryFrom<&MinaAccount> for Account {
                     }
                 },
                 provedState: zkapp.proved_state,
-                zkappUri: zkapp.zkapp_uri.0.clone().into(),
+                zkappUri: Bytes::from(zkapp.zkapp_uri.as_ref().to_vec()),
             }
         } else {
             // Empty ZkappAccount
