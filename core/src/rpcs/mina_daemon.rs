@@ -137,6 +137,47 @@ impl MinaDaemonRPC {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use num_traits::ToPrimitive;
+
+    fn print_state_proof(
+        proof: &crate::proof::state_proof::MinaStateProof,
+        pub_inputs: &crate::proof::state_proof::MinaStatePubInputs,
+    ) {
+        use crate::proof::state_proof::{MinaStateProof, MinaStatePubInputs};
+        let bytes = bincode::serialize(&(proof, pub_inputs)).unwrap();
+        println!("  state_proof_bytes: {} bytes", bytes.len());
+        match bincode::deserialize::<(MinaStateProof, MinaStatePubInputs)>(&bytes) {
+            Ok((proof, pub_inputs)) => {
+                println!("  --- state proof ---");
+                println!("    chain_states:            {}", proof.candidate_chain_states.len());
+                println!("    is_devnet:               {}", pub_inputs.is_state_proof_from_devnet);
+                println!("    bridge_tip_state_hash:   {}", pub_inputs.bridge_tip_state_hash);
+                for (i, h) in pub_inputs.candidate_chain_state_hashes.iter().enumerate() {
+                    println!("    candidate_state_hash[{i:2}]: {h}");
+                }
+            }
+            Err(e) => println!("    DESERIALIZE FAILED: {e}"),
+        }
+    }
+
+    fn print_account_proof(
+        proof: &crate::proof::account_proof::MinaAccountProof,
+        pub_inputs: &crate::proof::account_proof::MinaAccountPubInputs,
+    ) {
+        use crate::proof::account_proof::{MinaAccountProof, MinaAccountPubInputs};
+        let bytes = bincode::serialize(&(proof, pub_inputs)).unwrap();
+        println!("    account_proof_bytes: {} bytes", bytes.len());
+        match bincode::deserialize::<(MinaAccountProof, MinaAccountPubInputs)>(&bytes) {
+            Ok((proof, pub_inputs)) => {
+                println!("    merkle_path_len:  {}", proof.merkle_path.len());
+                println!("    balance:          {}", proof.account.balance.to_u64().unwrap_or(0));
+                println!("    nonce:            {}", proof.account.nonce.to_u32().unwrap_or(0));
+                println!("    ledger_hash:      {}", pub_inputs.ledger_hash);
+                println!("    encoded_account:  {} bytes", pub_inputs.encoded_account.len());
+            }
+            Err(e) => println!("    DESERIALIZE FAILED: {e}"),
+        }
+    }
 
     /// Queries the daemon frontier for the tip, then generates a state proof
     /// for that block. Requires MINA_RPC_NETWORK_URL and MINA_NETWORK env vars
@@ -203,11 +244,7 @@ mod tests {
             .await
             .expect("get_mina_proof_of_state");
 
-        println!(
-            "State proof generated: {} chain states, bridge_tip_state_hash={}",
-            proof.candidate_chain_states.len(),
-            pub_inputs.bridge_tip_state_hash,
-        );
+        print_state_proof(&proof, &pub_inputs);
         assert_eq!(pub_inputs.bridge_tip_state_hash.to_string(), fg_state_hash.to_string());
     }
 
@@ -240,11 +277,40 @@ mod tests {
             .await
             .expect("old get_mina_proof_of_state");
 
-        println!(
-            "Old path proof generated: {} chain states, bridge_tip_state_hash={}",
-            proof.candidate_chain_states.len(),
-            pub_inputs.bridge_tip_state_hash,
-        );
+        print_state_proof(&proof, &pub_inputs);
         assert_eq!(pub_inputs.bridge_tip_state_hash.to_string(), fg_state_hash.to_string());
+    }
+
+    /// Queries the daemon frontier for the tip, then generates an account proof
+    /// for the token base address. Prints the deserialized proof contents.
+    ///
+    /// cargo test -p mina_bridge_core --lib rpcs::mina_daemon::tests::test_get_mina_proof_of_account -- --nocapture
+    #[tokio::test]
+    async fn test_get_mina_proof_of_account() {
+        dotenv::from_filename("services/.env.local").ok();
+        dotenv::from_filename(".env.local").ok();
+        env_logger::try_init().ok();
+
+        let public_key = std::env::var("NORI_MOCK_ADMIN_PUBLIC_KEY")
+            .expect("NORI_MOCK_ADMIN_PUBLIC_KEY not set");
+        let token_id_decimal = std::env::var("NORI_MOCK_TOKEN_ID")
+            .expect("NORI_MOCK_TOKEN_ID not set");
+        let token_id = crate::utils::token_id::token_id_decimal_to_base58(&token_id_decimal)
+            .unwrap();
+
+        let rpc = MinaDaemonRPC::from_env().expect("MinaDaemonRPC::from_env");
+
+        let frontier = rpc.query_frontier(1).await.expect("query_frontier");
+        let (tip_state_hash, tip_height) = frontier.into_iter().next().expect("empty frontier");
+        println!("Tip: height={tip_height}, state_hash={tip_state_hash}");
+        println!("  account:  {public_key}");
+        println!("  token:    {token_id}");
+
+        let (proof, pub_inputs) = rpc
+            .get_mina_proof_of_account(&public_key, &token_id, &tip_state_hash.to_string())
+            .await
+            .expect("get_mina_proof_of_account");
+
+        print_account_proof(&proof, &pub_inputs);
     }
 }
